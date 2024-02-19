@@ -35,7 +35,7 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-[5%]" style={{ backgroundColor: backgroundColor + "33" }}>
       <div
-        className="border border-black/5 rounded-xl shadow-2xl shadow-black/5 lg:min-w-max group w-full lg:max-w-[70%] relative flex justify-center items-center overflow-hidden transition-all ease-in-out duration-300"
+        className="border border-black/5 rounded-xl shadow-2xl shadow-black/5 lg:min-w-max group w-full lg:max-w-[60%] relative flex justify-center items-center overflow-hidden transition-all ease-in-out duration-300"
         style={{
           backgroundColor: backgroundColor,
           aspectRatio: `${selectedAspectRatio.width}/${selectedAspectRatio.height}`,
@@ -91,161 +91,189 @@ export default function Home() {
             </label>
           </div>
         </div>
-        <div className="absolute top-4 right-4">
-          <Popover>
-            <PopoverTrigger>
-              <div className="w-8 h-8 bg-black/5 p-1.5 rounded-full group-hover:scale-125 ease-springy transform-gpu transition-all duration-300 hover:bg-black/10 hover:ease-in-out">
-                <div className="w-full h-full text-black/40">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M9.66852 16.5404L7.67137 19.7958C6.8191 21.185 4.89246 21.4125 3.74002 20.2601C2.58758 19.1076 2.81511 17.181 4.20431 16.3287L7.45968 14.3316C7.73521 14.1625 7.78034 13.7804 7.55177 13.5518L6.41423 12.4143C5.63317 11.6332 5.63317 10.3669 6.41423 9.58586L7.14646 8.85363C7.34173 8.65837 7.65831 8.65837 7.85357 8.85363L15.1465 16.1465C15.3417 16.3418 15.3417 16.6584 15.1465 16.8536L14.4142 17.5859C13.6332 18.3669 12.3669 18.3669 11.5858 17.5859L10.4483 16.4483C10.2197 16.2198 9.83756 16.2649 9.66852 16.5404Z"
-                      fill="currentColor"
-                    ></path>
-                    <path
-                      d="M16.6464 14.6464L9.35348 7.3535C9.15821 7.15823 9.15822 6.84164 9.35349 6.64638L12.1186 3.8814C13.2902 2.70989 15.1896 2.7099 16.3612 3.88142L20.1185 7.63865C21.2901 8.81022 21.2901 10.7097 20.1185 11.8813L17.3535 14.6464C17.1582 14.8416 16.8416 14.8416 16.6464 14.6464Z"
-                      fill="currentColor"
-                    ></path>
-                  </svg>
+        {videoFile && !transpilingStarted && !transpilingFinished && (
+          <button
+            className="flex items-center text-black/70 bg-white/90 hover:scale-105 transition-all ease-in-out shadow-md border-white/5 shadow-black/5 border backdrop-blur-3xl px-3.5 gap-1 text-sm font-medium py-1 rounded-md absolute bottom-3 left-4"
+            onClick={() => {
+              generateVideo({
+                videoFile,
+                mockup: selectedMockup,
+                backgroundColor,
+                canvasWidth: selectedAspectRatio.width,
+                canvasHeight: selectedAspectRatio.height,
+                phoneSizePercentage: scale,
+                mockupBackgroundColor: "black",
+                verticalOffset,
+              });
+            }}
+          >
+            <span>Generate Video</span>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+              <path
+                fillRule="evenodd"
+                d="M9.58 1.077a.75.75 0 0 1 .405.82L9.165 6h4.085a.75.75 0 0 1 .567 1.241l-6.5 7.5a.75.75 0 0 1-1.302-.638L6.835 10H2.75a.75.75 0 0 1-.567-1.241l6.5-7.5a.75.75 0 0 1 .897-.182Z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+        )}
+        {!transpilingStarted && !transpilingFinished && (
+          <div className="absolute top-4 right-4">
+            <Popover>
+              <PopoverTrigger>
+                <div className="w-8 h-8 bg-black/5 p-1.5 rounded-full group-hover:scale-125 ease-springy transform-gpu transition-all duration-300 hover:bg-black/10 hover:ease-in-out">
+                  <div className="w-full h-full text-black/40">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+                      <path
+                        d="M9.66852 16.5404L7.67137 19.7958C6.8191 21.185 4.89246 21.4125 3.74002 20.2601C2.58758 19.1076 2.81511 17.181 4.20431 16.3287L7.45968 14.3316C7.73521 14.1625 7.78034 13.7804 7.55177 13.5518L6.41423 12.4143C5.63317 11.6332 5.63317 10.3669 6.41423 9.58586L7.14646 8.85363C7.34173 8.65837 7.65831 8.65837 7.85357 8.85363L15.1465 16.1465C15.3417 16.3418 15.3417 16.6584 15.1465 16.8536L14.4142 17.5859C13.6332 18.3669 12.3669 18.3669 11.5858 17.5859L10.4483 16.4483C10.2197 16.2198 9.83756 16.2649 9.66852 16.5404Z"
+                        fill="currentColor"
+                      ></path>
+                      <path
+                        d="M16.6464 14.6464L9.35348 7.3535C9.15821 7.15823 9.15822 6.84164 9.35349 6.64638L12.1186 3.8814C13.2902 2.70989 15.1896 2.7099 16.3612 3.88142L20.1185 7.63865C21.2901 8.81022 21.2901 10.7097 20.1185 11.8813L17.3535 14.6464C17.1582 14.8416 16.8416 14.8416 16.6464 14.6464Z"
+                        fill="currentColor"
+                      ></path>
+                    </svg>
+                  </div>
                 </div>
-              </div>
-            </PopoverTrigger>
-            <PopoverContent className="px-3 py-2 rounded-lg backdrop-blur-3xl shadow-2xl shadow-black/10 bg-black/5 mt-3 ring-1 ring-black/5 PopoverContent flex flex-col w-52 overflow-hidden">
-              <label className="font-normal mb-0.5 text-black/80 text-xs">Device</label>
-              <div className="flex relative items-center w-full">
-                <select
-                  tabIndex={-1}
-                  className="appearance-none bg-white/60 rounded-md px-3 py-1 w-full text-xs font-normal text-black/80"
-                  onChange={(event) => {
-                    setSelectedMockup(mockupsDefs.find((mockup) => mockup.name === event.target.value)!);
-                  }}
-                >
-                  <optgroup label="iPhone">
-                    {mockupsDefs.map((mockup) => (
-                      <option key={mockup.name} value={mockup.name}>
-                        {mockup.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                  {/* <optgroup label="Android">
+              </PopoverTrigger>
+              <PopoverContent className="px-3 py-2 rounded-lg backdrop-blur-3xl shadow-2xl shadow-black/10 bg-black/5 mt-3 ring-1 ring-black/5 PopoverContent flex flex-col w-52 overflow-hidden">
+                <label className="font-normal mb-0.5 text-black/80 text-xs">Device</label>
+                <div className="flex relative items-center w-full">
+                  <select
+                    tabIndex={-1}
+                    className="appearance-none bg-white/60 rounded-md px-3 py-1 w-full text-xs font-normal text-black/80"
+                    onChange={(event) => {
+                      setSelectedMockup(mockupsDefs.find((mockup) => mockup.name === event.target.value)!);
+                    }}
+                  >
+                    <optgroup label="iPhone">
+                      {mockupsDefs.map((mockup) => (
+                        <option key={mockup.name} value={mockup.name}>
+                          {mockup.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    {/* <optgroup label="Android">
                   <option value="volvo">Volvo</option>
                   <option value="saab">Saab</option>
                 </optgroup> */}
-                </select>
+                  </select>
 
-                <div className="absolute right-1 text-black/70">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
-                    <path
-                      fillRule="evenodd"
-                      d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                  <div className="absolute right-1 text-black/70">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
+                      <path
+                        fillRule="evenodd"
+                        d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
                 </div>
-              </div>
-              <hr className="my-1.5 border-none" />
-              <label className="font-normal mb-0.5 text-black/80 text-xs">Aspec Ratio</label>
-              <div className="flex relative items-center w-full">
-                <select
-                  tabIndex={-1}
-                  className="appearance-none bg-white/60 rounded-md px-3 py-1 w-full text-xs font-normal text-black/80"
-                  onChange={(event) => {
-                    setSelectedAspectRatio(aspectRatios.find((ratio) => ratio.name === event.target.value)!);
-                  }}
-                >
-                  <optgroup label="iPhone">
-                    {aspectRatios.map((ratio) => (
-                      <option key={ratio.name} value={ratio.name}>
-                        {ratio.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                </select>
-
-                <div className="absolute right-1 text-black/70">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
-                    <path
-                      fillRule="evenodd"
-                      d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-              </div>
-              <hr className="my-1.5 border-none" />
-              <label className="font-normal mb-1 text-black/80 text-xs flex justify-between items-center">
-                Size
-                <button
-                  className="text-black/50"
-                  onClick={() => {
-                    setScale(90);
-                  }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-                    <path
-                      fillRule="evenodd"
-                      d="M12.5 9.75A2.75 2.75 0 0 0 9.75 7H4.56l2.22 2.22a.75.75 0 1 1-1.06 1.06l-3.5-3.5a.75.75 0 0 1 0-1.06l3.5-3.5a.75.75 0 0 1 1.06 1.06L4.56 5.5h5.19a4.25 4.25 0 0 1 0 8.5h-1a.75.75 0 0 1 0-1.5h1a2.75 2.75 0 0 0 2.75-2.75Z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </button>
-              </label>
-              <Slider
-                defaultValue={[90]}
-                max={150}
-                step={1}
-                min={30}
-                value={[scale]}
-                onValueChange={(value) => {
-                  setScale(value[0]);
-                }}
-              />
-              <hr className="my-1.5 border-none" />
-              <label className="font-normal mb-1 text-black/80 text-xs flex justify-between items-center">
-                Vertical Position
-                <button
-                  className="text-black/50"
-                  onClick={() => {
-                    setVerticalOffset(0);
-                  }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-                    <path
-                      fillRule="evenodd"
-                      d="M12.5 9.75A2.75 2.75 0 0 0 9.75 7H4.56l2.22 2.22a.75.75 0 1 1-1.06 1.06l-3.5-3.5a.75.75 0 0 1 0-1.06l3.5-3.5a.75.75 0 0 1 1.06 1.06L4.56 5.5h5.19a4.25 4.25 0 0 1 0 8.5h-1a.75.75 0 0 1 0-1.5h1a2.75 2.75 0 0 0 2.75-2.75Z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </button>
-              </label>
-              <Slider
-                defaultValue={[0]}
-                max={100}
-                step={1}
-                min={-100}
-                value={[verticalOffset]}
-                onValueChange={(value) => {
-                  setVerticalOffset(value[0]);
-                }}
-              />
-              <hr className="my-1.5 border-none" />
-              <label className="font-normal mb-1 text-black/80 text-xs">Background Color</label>
-              <div className="flex gap-2 overflow-auto pb-2">
-                {colors.map((color) => (
-                  <div
-                    key={color}
-                    className={cn("w-6 h-6 rounded-full cursor-pointerborder-0 flex items-center justify-center border border-black/10 shadow-sm", color === backgroundColor && "")}
-                    style={{ backgroundColor: color }}
-                    onClick={() => {
-                      setBackgroundColor(color);
+                <hr className="my-1.5 border-none" />
+                <label className="font-normal mb-0.5 text-black/80 text-xs">Aspec Ratio</label>
+                <div className="flex relative items-center w-full">
+                  <select
+                    tabIndex={-1}
+                    className="appearance-none bg-white/60 rounded-md px-3 py-1 w-full text-xs font-normal text-black/80"
+                    onChange={(event) => {
+                      setSelectedAspectRatio(aspectRatios.find((ratio) => ratio.name === event.target.value)!);
                     }}
                   >
-                    {backgroundColor === color && <div className="bg-white shadow-sm  rounded-full h-2.5 w-2.5" />}
+                    <optgroup label="iPhone">
+                      {aspectRatios.map((ratio) => (
+                        <option key={ratio.name} value={ratio.name}>
+                          {ratio.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+
+                  <div className="absolute right-1 text-black/70">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
+                      <path
+                        fillRule="evenodd"
+                        d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
                   </div>
-                ))}
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
+                </div>
+                <hr className="my-1.5 border-none" />
+                <label className="font-normal mb-1 text-black/80 text-xs flex justify-between items-center">
+                  Size
+                  <button
+                    className="text-black/50"
+                    onClick={() => {
+                      setScale(90);
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                      <path
+                        fillRule="evenodd"
+                        d="M12.5 9.75A2.75 2.75 0 0 0 9.75 7H4.56l2.22 2.22a.75.75 0 1 1-1.06 1.06l-3.5-3.5a.75.75 0 0 1 0-1.06l3.5-3.5a.75.75 0 0 1 1.06 1.06L4.56 5.5h5.19a4.25 4.25 0 0 1 0 8.5h-1a.75.75 0 0 1 0-1.5h1a2.75 2.75 0 0 0 2.75-2.75Z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </label>
+                <Slider
+                  defaultValue={[90]}
+                  max={150}
+                  step={1}
+                  min={30}
+                  value={[scale]}
+                  onValueChange={(value) => {
+                    setScale(value[0]);
+                  }}
+                />
+                <hr className="my-1.5 border-none" />
+                <label className="font-normal mb-1 text-black/80 text-xs flex justify-between items-center">
+                  Vertical Position
+                  <button
+                    className="text-black/50"
+                    onClick={() => {
+                      setVerticalOffset(0);
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                      <path
+                        fillRule="evenodd"
+                        d="M12.5 9.75A2.75 2.75 0 0 0 9.75 7H4.56l2.22 2.22a.75.75 0 1 1-1.06 1.06l-3.5-3.5a.75.75 0 0 1 0-1.06l3.5-3.5a.75.75 0 0 1 1.06 1.06L4.56 5.5h5.19a4.25 4.25 0 0 1 0 8.5h-1a.75.75 0 0 1 0-1.5h1a2.75 2.75 0 0 0 2.75-2.75Z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </label>
+                <Slider
+                  defaultValue={[0]}
+                  max={100}
+                  step={1}
+                  min={-100}
+                  value={[verticalOffset]}
+                  onValueChange={(value) => {
+                    setVerticalOffset(value[0]);
+                  }}
+                />
+                <hr className="my-1.5 border-none" />
+                <label className="font-normal mb-1 text-black/80 text-xs">Background Color</label>
+                <div className="flex gap-2 overflow-auto pb-2">
+                  {colors.map((color) => (
+                    <div
+                      key={color}
+                      className={cn("w-6 h-6 rounded-full cursor-pointerborder-0 flex items-center justify-center border border-black/10 shadow-sm", color === backgroundColor && "")}
+                      style={{ backgroundColor: color }}
+                      onClick={() => {
+                        setBackgroundColor(color);
+                      }}
+                    >
+                      {backgroundColor === color && <div className="bg-white shadow-sm  rounded-full h-2.5 w-2.5" />}
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+        )}
         {videoFile && <div className="bottom-3 right-4 absolute text-xs  text-black/50 font-mono">{videoFile?.name + " - " + Math.fround(videoFile.size / 1000000).toPrecision(3) + "/Mb"}</div>}
         {transpilingStarted && !transpilingFinished && (
           <>
@@ -306,24 +334,6 @@ export default function Home() {
           </div>
         )}
       </div>
-      {videoFile && (
-        <button
-          onClick={() => {
-            generateVideo({
-              videoFile,
-              mockup: selectedMockup,
-              backgroundColor,
-              canvasWidth: selectedAspectRatio.width,
-              canvasHeight: selectedAspectRatio.height,
-              phoneSizePercentage: scale,
-              mockupBackgroundColor: "black",
-              verticalOffset,
-            });
-          }}
-        >
-          generate
-        </button>
-      )}
     </main>
   );
 }
