@@ -91,15 +91,16 @@ const useFFmpeg = (): UseFFmpegHook => {
         offsetY,
         verticalOffset,
       });
+      const borderRadius = 60;
       const geqFilterExpression = `
-      geq=lum='p(X,Y)':a='if(gt(abs(W/2-X),W/2-20)*gt(abs(H/2-Y),H/2-20),
-      if(lte(hypot(20-(W/2-abs(W/2-X)),20-(H/2-abs(H/2-Y))),20),255,0),255)'
+      geq=lum='p(X,Y)':a='if(gt(abs(W/2-X),W/2-${borderRadius})*gt(abs(H/2-Y),H/2-${borderRadius}),
+      if(lte(hypot(${borderRadius}-(W/2-abs(W/2-X)),${borderRadius}-(H/2-abs(H/2-Y))),${borderRadius}),255,0),255)'
       `.trim();
 
       const filterComplex = `
       [1:v]scale=${mockupInnerWidth}:${mockupInnerHeight},format=yuva420p,${geqFilterExpression}[video_scaled];
-      color=c=${mockupBackgroundColor}:s=${mockupInnerWidth + 3}x${mockupInnerHeight + 3},format=yuva420p,${geqFilterExpression}[colored_square];
-      [0:v][colored_square]overlay=x=${posX + offsetX}:y=${adjustedPosY + offsetY}[bg_with_square];
+      color=c=${mockupBackgroundColor}:s=${Math.round(mockupInnerWidth * 1.02)}x${Math.round(mockupInnerHeight * 1.02)},format=yuva420p,${geqFilterExpression}[colored_square];
+      [0:v][colored_square]overlay=x=${Math.round((posX + offsetX) * 0.98)}:y=${Math.round((adjustedPosY + offsetY) * 0.98)}[bg_with_square];
       [bg_with_square][video_scaled]overlay=x=${posX + offsetX}:y=${adjustedPosY + offsetY}[video_with_bg];
       [2:v]scale=${mockupWidth}:${mockupHeight}[mockup_scaled];
       [video_with_bg][mockup_scaled]overlay=x=${posX}:y=${adjustedPosY}

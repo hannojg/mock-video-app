@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@radix-ui/react-popover";
 
 import Image from "next/image";
-import { ChangeEvent, useCallback, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useState } from "react";
 
 export default function Home() {
   const { ffmpeg, isLoaded, isLoading, generateVideo, progress, reset, transpilingFinished, finishedVideoUrl, transpilingStarted } = useFFmpeg();
@@ -17,21 +17,33 @@ export default function Home() {
   const [scale, setScale] = useState(90);
   const [backgroundColor, setBackgroundColor] = useState(colors[0]);
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string>("");
   const [verticalOffset, setVerticalOffset] = useState(0);
   const [selectedAspectRatio, setSelectedAspectRatio] = useState(aspectRatios[0]);
 
-  const handleFileChange = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files && files.length > 0) {
-      setVideoFile(null);
-      setTimeout(() => {
-        setVideoFile(files[0]);
-      }, 0);
+      setVideoFile(files[0]);
+      console.log("Video file selected:", files[0].name);
     }
+
+    setTimeout(() => {
+      event.target.value = "";
+    }, 50);
   }, []);
-  const removeVideo = useCallback(() => {
-    setVideoFile(null);
-  }, []);
+  useEffect(() => {
+    if (videoFile) {
+      const url = URL.createObjectURL(videoFile);
+      console.log("Generated video URL:", url); // Debugging: Check the generated URL
+      setVideoUrl(url);
+
+      return () => {
+        console.log("Revoking video URL:", url); // Debugging: Ensure URLs are revoked
+        URL.revokeObjectURL(url);
+      };
+    }
+  }, [videoFile]);
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-[5%]" style={{ backgroundColor: backgroundColor + "33" }}>
       <div
@@ -79,8 +91,8 @@ export default function Home() {
               }}
             >
               {videoFile && (
-                <video controls={false} autoPlay className="w-full h-full " loop>
-                  <source src={URL.createObjectURL(videoFile)} />
+                <video controls={false} autoPlay className="w-full h-full " key={videoUrl} loop>
+                  <source src={videoUrl} />
                 </video>
               )}
             </div>
@@ -274,7 +286,9 @@ export default function Home() {
             </Popover>
           </div>
         )}
-        {videoFile && <div className="bottom-3 right-4 absolute text-xs  text-black/50 font-mono">{videoFile?.name + " - " + Math.fround(videoFile.size / 1000000).toPrecision(3) + "/Mb"}</div>}
+        {videoFile && !transpilingStarted && !transpilingFinished && (
+          <div className="bottom-3 right-4 absolute text-xs  text-black/50 font-mono">{videoFile?.name + " - " + Math.fround(videoFile.size / 1000000).toPrecision(3) + "/Mb"}</div>
+        )}
         {transpilingStarted && !transpilingFinished && (
           <>
             <div className="absolute transition-all h-full w-full left-0 " />
