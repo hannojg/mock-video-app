@@ -89,7 +89,7 @@ export default function Home() {
               }}
             >
               {videoFile && (
-                <video controls={false} autoPlay className="w-full h-full " key={videoUrl} loop>
+                <video controls={false} muted autoPlay className="w-full h-full " key={videoUrl} loop>
                   <source src={videoUrl} />
                 </video>
               )}
