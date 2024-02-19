@@ -190,6 +190,7 @@ export default function Home() {
                     <select
                       tabIndex={-1}
                       className="appearance-none bg-white/60 rounded-md px-3 py-1 w-full text-xs font-normal text-black/80"
+                      value={selectedMockup.name}
                       onChange={(event) => {
                         setSelectedMockup(mockupsDefs.find((mockup) => mockup.name === event.target.value)!);
                       }}
@@ -221,6 +222,7 @@ export default function Home() {
                   <label className="font-normal mb-0.5 text-black/80 text-xs">Aspec Ratio</label>
                   <div className="flex relative items-center w-full">
                     <select
+                      value={selectedAspectRatio.name}
                       tabIndex={-1}
                       className="appearance-none bg-white/60 rounded-md px-3 py-1 w-full text-xs font-normal text-black/80"
                       onChange={(event) => {
