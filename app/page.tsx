@@ -6,10 +6,11 @@ import { mockupsDefs } from "@/lib/constants/mockups";
 import { aspectRatios } from "@/lib/constants/sizes";
 import useFFmpeg from "@/lib/hooks/useFFmpeg";
 import { cn } from "@/lib/utils";
+import { smartTrim } from "@/lib/utils/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@radix-ui/react-popover";
 
 import Image from "next/image";
-import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, DragEventHandler, useCallback, useEffect, useRef, useState } from "react";
 
 export default function Home() {
   const { ffmpeg, isLoaded, isLoading, generateVideo, progress, reset, transpilingFinished, finishedVideoUrl, transpilingStarted } = useFFmpeg();
@@ -20,6 +21,7 @@ export default function Home() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>("");
   const [verticalOffset, setVerticalOffset] = useState(0);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [selectedAspectRatio, setSelectedAspectRatio] = useState(aspectRatios[0]);
 
   const handleFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
@@ -27,7 +29,6 @@ export default function Home() {
     if (files && files.length > 0) {
       setVideoFile(files[0]);
     }
-
     setTimeout(() => {
       event.target.value = "";
     }, 50);
@@ -63,6 +64,27 @@ export default function Home() {
       video.play();
     }
   }, [transpilingStarted, transpilingFinished]);
+
+  const handleDragOver = useCallback((event: DragEvent<HTMLLabelElement>) => {
+    console.log("drag over");
+    event.preventDefault();
+    setIsDragOver(true);
+  }, []);
+  const handleDragLeave = useCallback((event: DragEvent<HTMLLabelElement>) => {
+    console.log("drag leave");
+    event.preventDefault();
+    setIsDragOver(false);
+  }, []);
+  const handleDrop = useCallback((event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    console.log("drag drop");
+    setIsDragOver(false);
+
+    const files = event.dataTransfer.files;
+    if (files && files.length > 0) {
+      setVideoFile(files[0]);
+    }
+  }, []);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-[5%]" style={{ backgroundColor: backgroundColor + "33" }}>
@@ -106,11 +128,12 @@ export default function Home() {
                     />
                   </svg>
 
-                  <p className="text-xs text-center text-black/50 max-w-full">Click here to upload a screen recording of your app</p>
+                  <p className="text-xs text-center text-black/50 max-w-full">Click or drag here to add a screen recording of your app</p>
                 </div>
+                {/* {isDragOver && <div className="w-full h-full absolute bg-white/80 backdrop-blur-lg pointer-events-none flex items-center justify-center text-black/70 text-xs">Drop video here</div>} */}
               </div>
               <div
-                className="absolute rounded-[5%] overflow-hidden group-hover/phone:opacity-10 transition-all duration-200 group-hover/phone:blur-sm "
+                className={cn("absolute rounded-[5%] overflow-hidden  transition-all duration-200 group-hover/phone:opacity-10 group-hover/phone:blur-sm")}
                 style={{
                   left: `${((selectedMockup.width - selectedMockup.innerWidth) / selectedMockup.width) * 50}%`,
                   top: `${((selectedMockup.height - selectedMockup.innerHeight) / selectedMockup.height) * 40}%`,
@@ -133,11 +156,12 @@ export default function Home() {
                 height={selectedMockup.height}
                 className="h-full w-full relative object-contain"
               />
-              <label className="w-full h-full absolute cursor-pointer top-0">
+              <label className="w-full h-full absolute cursor-pointer top-0" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
                 <input type="file" className="hidden" accept="video/*" onChange={handleFileChange} />
               </label>
             </div>
           </div>
+
           {videoFile && !transpilingStarted && !transpilingFinished && videoRef.current && (
             <button
               className="flex items-center text-black/70 bg-white/90 hover:scale-105 transition-all ease-in-out shadow-md border-white/5 shadow-black/5 border backdrop-blur-3xl px-3.5 gap-1 text-sm font-medium py-1 rounded-md absolute bottom-3 left-4"
@@ -323,7 +347,7 @@ export default function Home() {
             </div>
           )}
           {videoFile && !transpilingStarted && !transpilingFinished && (
-            <div className="bottom-3 right-4 absolute text-xs  text-black/50 font-mono">{videoFile?.name + " - " + Math.fround(videoFile.size / 1000000).toPrecision(3) + "/Mb"}</div>
+            <div className="bottom-3 right-4 absolute text-xs  text-black/50 font-mono">{smartTrim(videoFile?.name, 16) + " | " + Math.fround(videoFile.size / 1000000).toPrecision(3) + "/Mb"}</div>
           )}
           {transpilingStarted && !transpilingFinished && (
             <>
