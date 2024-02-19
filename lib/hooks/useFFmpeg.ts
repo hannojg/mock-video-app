@@ -2,8 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import { Mockup } from "../constants/mockups";
-import { mock } from "node:test";
-import { AspectRatio } from "../constants/sizes";
 
 type GenerateVideoParams = {
   videoFile: File;
