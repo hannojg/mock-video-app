@@ -17,7 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>{<NoSSRWrapper>children</NoSSRWrapper>}</body>
+      <body className={inter.className}>{<NoSSRWrapper>{children}</NoSSRWrapper>}</body>
     </html>
   );
 }
