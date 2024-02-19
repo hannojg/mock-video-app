@@ -219,13 +219,11 @@ export default function Home() {
                         setSelectedAspectRatio(aspectRatios.find((ratio) => ratio.name === event.target.value)!);
                       }}
                     >
-                      <optgroup label="iPhone">
-                        {aspectRatios.map((ratio) => (
-                          <option key={ratio.name} value={ratio.name}>
-                            {ratio.name}
-                          </option>
-                        ))}
-                      </optgroup>
+                      {aspectRatios.map((ratio) => (
+                        <option key={ratio.name} value={ratio.name}>
+                          {ratio.name}
+                        </option>
+                      ))}
                     </select>
 
                     <div className="absolute right-1 text-black/70">
