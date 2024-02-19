@@ -195,6 +195,7 @@ export default function Home() {
               <div className="flex gap-2 overflow-auto pb-2">
                 {colors.map((color) => (
                   <div
+                    key={color}
                     className={cn("w-6 h-6 rounded-full cursor-pointerborder-0 flex items-center justify-center border border-black/10 shadow-sm", color === backgroundColor && "")}
                     style={{ backgroundColor: color }}
                     onClick={() => {

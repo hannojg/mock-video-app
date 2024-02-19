@@ -139,7 +139,7 @@ const useFFmpeg = (): UseFFmpegHook => {
 
   const load = async () => {
     setIsLoading(true);
-    const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+    const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd";
     const ffmpeg = ffmpegRef.current;
     ffmpeg.on("log", ({ message }) => console.log(message));
     await ffmpeg.load({
