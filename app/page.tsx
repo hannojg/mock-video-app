@@ -416,7 +416,7 @@ export default function Home() {
               clipRule="evenodd"
             />
           </svg>
-          This app runs 100% locally (using ffmpeg.wasm), so your video data leaves your device.
+          This app runs 100% locally (using ffmpeg.wasm), so your video data never leaves your device.
         </div>
       </div>
       <div className="flex-1 flex flex-col justify-end pb-3">
