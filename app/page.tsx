@@ -382,7 +382,7 @@ export default function Home() {
             </div>
           )}
         </div>
-        <div className="text-xs flex items-center text-black/30 gap-0.5 absolute -bottom-8">
+        <div className="text-xs flex items-center text-black/50 gap-0.5 absolute -bottom-8">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4 ">
             <path
               fillRule="evenodd"
