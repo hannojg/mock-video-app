@@ -133,7 +133,7 @@ export default function Home() {
                 {/* {isDragOver && <div className="w-full h-full absolute bg-white/80 backdrop-blur-lg pointer-events-none flex items-center justify-center text-black/70 text-xs">Drop video here</div>} */}
               </div>
               <div
-                className={cn("absolute rounded-[5%] overflow-hidden  transition-all duration-200 group-hover/phone:opacity-10 group-hover/phone:blur-sm")}
+                className={cn("absolute rounded-[5%] overflow-hidden  transition-all duration-200 group-hover/phone:opacity-30 group-hover/phone:blur-sm")}
                 style={{
                   left: `${((selectedMockup.width - selectedMockup.innerWidth) / selectedMockup.width) * 50}%`,
                   top: `${((selectedMockup.height - selectedMockup.innerHeight) / selectedMockup.height) * 40}%`,
