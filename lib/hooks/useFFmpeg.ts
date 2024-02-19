@@ -100,7 +100,7 @@ const useFFmpeg = (): UseFFmpegHook => {
       const filterComplex = `
       [1:v]scale=${mockupInnerWidth}:${mockupInnerHeight},format=yuva420p,${geqFilterExpression}[video_scaled];
       color=c=${mockupBackgroundColor}:s=${Math.round(mockupInnerWidth * 1.02)}x${Math.round(mockupInnerHeight * 1.02)},format=yuva420p,${geqFilterExpression}[colored_square];
-      [0:v][colored_square]overlay=x=${Math.round((posX + offsetX) * 0.98)}:y=${Math.round((adjustedPosY + offsetY) * 0.98)}[bg_with_square];
+      [0:v][colored_square]overlay=x=${Math.round((posX + offsetX) * 0.99)}:y=${Math.round((adjustedPosY + offsetY) * 0.99)}[bg_with_square];
       [bg_with_square][video_scaled]overlay=x=${posX + offsetX}:y=${adjustedPosY + offsetY}[video_with_bg];
       [2:v]scale=${mockupWidth}:${mockupHeight}[mockup_scaled];
       [video_with_bg][mockup_scaled]overlay=x=${posX}:y=${adjustedPosY}
