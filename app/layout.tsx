@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import NoSSRWrapper from "@/components/noSSRWrapper";
+import { Analytics } from "@vercel/analytics/react";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -17,7 +18,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>{<NoSSRWrapper>{children}</NoSSRWrapper>}</body>
+      <body className={inter.className}>
+        {
+          <NoSSRWrapper>
+            {children}
+            <Analytics />
+          </NoSSRWrapper>
+        }
+      </body>
     </html>
   );
 }
