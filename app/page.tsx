@@ -384,7 +384,7 @@ export default function Home() {
               clipRule="evenodd"
             />
           </svg>
-          Mockgen runs on your machine, so your video data leaves your computer.
+          This app runs 100% locally (using ffmpeg.wasm), so your video data leaves your device.
         </div>
       </div>
       <div className="flex-1" />
