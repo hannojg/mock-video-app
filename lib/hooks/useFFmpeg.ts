@@ -12,6 +12,7 @@ type GenerateVideoParams = {
   phoneSizePercentage: number;
   mockupBackgroundColor: string;
   verticalOffset: number;
+  duration: number;
 };
 
 interface UseFFmpegHook {
@@ -46,7 +47,17 @@ const useFFmpeg = (): UseFFmpegHook => {
     setFinishedVideoUrl(null);
     ffmpegRef.current.terminate();
   }, []);
-  const generateVideo = async ({ backgroundColor, mockup, mockupBackgroundColor, phoneSizePercentage, verticalOffset, videoFile, canvasHeight, canvasWidth }: GenerateVideoParams): Promise<void> => {
+  const generateVideo = async ({
+    backgroundColor,
+    mockup,
+    mockupBackgroundColor,
+    phoneSizePercentage,
+    verticalOffset,
+    videoFile,
+    canvasHeight,
+    canvasWidth,
+    duration,
+  }: GenerateVideoParams): Promise<void> => {
     if (!ffmpegRef.current || !ffmpegRef.current.loaded) {
       console.log("FFmpeg not loaded, loading now...");
       await load();
@@ -118,7 +129,7 @@ const useFFmpeg = (): UseFFmpegHook => {
         "-filter_complex",
         filterComplex,
         "-t",
-        "10",
+        duration.toString(),
         "-map",
         "0:v",
         "-c:v",
@@ -149,7 +160,7 @@ const useFFmpeg = (): UseFFmpegHook => {
     setIsLoading(true);
     const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd";
     const ffmpeg = ffmpegRef.current;
-    ffmpeg.on("log", ({ message }) => console.log(message));
+    //ffmpeg.on("log", ({ message }) => console.log(message));
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
       wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),

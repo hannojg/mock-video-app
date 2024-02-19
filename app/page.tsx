@@ -9,11 +9,12 @@ import { cn } from "@/lib/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@radix-ui/react-popover";
 
 import Image from "next/image";
-import { ChangeEvent, useCallback, useEffect, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 
 export default function Home() {
   const { ffmpeg, isLoaded, isLoading, generateVideo, progress, reset, transpilingFinished, finishedVideoUrl, transpilingStarted } = useFFmpeg();
   const [selectedMockup, setSelectedMockup] = useState(mockupsDefs[0]);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [scale, setScale] = useState(90);
   const [backgroundColor, setBackgroundColor] = useState(colors[0]);
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -42,6 +43,27 @@ export default function Home() {
       };
     }
   }, [videoFile]);
+  useEffect(() => {
+    if (videoRef.current) {
+      const videoDuration = videoRef.current.duration;
+      const currentTime = (progress / 100) * videoDuration;
+      videoRef.current.currentTime = currentTime;
+    }
+  }, [progress]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (transpilingStarted) {
+      video.pause();
+    }
+
+    if (transpilingFinished) {
+      video.play();
+    }
+  }, [transpilingStarted, transpilingFinished]);
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-[5%]" style={{ backgroundColor: backgroundColor + "33" }}>
       <div
@@ -52,13 +74,13 @@ export default function Home() {
         }}
       >
         <div
-          className="absolute flex items-center justify-center group/phone"
+          className="cursor-pointer absolute flex items-center justify-center group/phone"
           style={{
             height: `${scale}%`,
             marginTop: `${verticalOffset}%`,
           }}
         >
-          <div className="h-full w-full flex items-center justify-center ">
+          <div className="h-full w-full flex items-center justify-center cursor-pointer">
             <div className="absolute w-full h-full bg-white/5 rounded-[20%]  flex flex-col items-center justify-center p-[5%]  group-hover/phone:bg-white/30 transition-colors transform-gpu">
               <div
                 className="flex flex-col items-center gap-2"
@@ -89,7 +111,7 @@ export default function Home() {
               }}
             >
               {videoFile && (
-                <video controls={false} muted autoPlay className="w-full h-full " key={videoUrl} loop>
+                <video controls={false} muted autoPlay className="w-full h-full " key={videoUrl} loop playsInline unselectable="on" ref={videoRef}>
                   <source src={videoUrl} />
                 </video>
               )}
@@ -101,7 +123,7 @@ export default function Home() {
             </label>
           </div>
         </div>
-        {videoFile && !transpilingStarted && !transpilingFinished && (
+        {videoFile && !transpilingStarted && !transpilingFinished && videoRef.current && (
           <button
             className="flex items-center text-black/70 bg-white/90 hover:scale-105 transition-all ease-in-out shadow-md border-white/5 shadow-black/5 border backdrop-blur-3xl px-3.5 gap-1 text-sm font-medium py-1 rounded-md absolute bottom-3 left-4"
             onClick={() => {
@@ -114,6 +136,7 @@ export default function Home() {
                 phoneSizePercentage: scale,
                 mockupBackgroundColor: "black",
                 verticalOffset,
+                duration: videoRef.current?.duration!,
               });
             }}
           >
@@ -291,7 +314,7 @@ export default function Home() {
           <>
             <div className="absolute transition-all h-full w-full left-0 " />
             <div
-              className="backdrop-blur-lg absolute transition-all h-full left-0 bg-black/5"
+              className="absolute transition-all h-full left-0 bg-black/5"
               style={{
                 width: `${progress}%`,
               }}
@@ -303,10 +326,10 @@ export default function Home() {
           </>
         )}
         {transpilingFinished && finishedVideoUrl && (
-          <div className="backdrop-blur-lg absolute transition-all h-full flex items-center justify-center w-full left-0">
+          <div className="bg-white/20 backdrop-blur-md absolute transition-all h-full flex items-center justify-center w-full left-0">
             <div className="flex flex-col items-center">
               <button
-                className="flex items-center text-white/100 bg-white/30 hover:scale-105 transition-all ease-in-out shadow-md border-white/5 border backdrop-blur-3xl px-3.5 gap-1 text-sm font-medium py-1 rounded-md"
+                className="flex items-center text-black/70 bg-white/90 hover:scale-105 transition-all ease-in-out shadow-md border-white/5 border backdrop-blur-3xl px-3.5 gap-1 text-sm font-medium py-1 rounded-md"
                 onClick={() => {
                   const a = document.createElement("a");
                   a.href = finishedVideoUrl;
