@@ -393,8 +393,9 @@ export default function Home() {
           This app runs 100% locally (using ffmpeg.wasm), so your video data leaves your device.
         </div>
       </div>
-      <div className="flex-1" />
-      <div className="text-xs text-black/30 bottom-3 absolute">© Laurids Kern {new Date().getFullYear()}</div>
+      <div className="flex-1 flex flex-col justify-end pb-3">
+        <div className="text-xs text-black/30 ">© Laurids Kern {new Date().getFullYear()}</div>
+      </div>
     </main>
   );
 }
