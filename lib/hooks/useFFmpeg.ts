@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import { Mockup } from "../constants/mockups";
@@ -19,6 +19,7 @@ interface UseFFmpegHook {
   isLoaded: boolean;
   isLoading: boolean;
   progress: number;
+  reset: () => void;
   transpilingStarted: boolean;
   transpilingFinished: boolean;
   finishedVideoUrl: string | null;
@@ -38,9 +39,17 @@ const useFFmpeg = (): UseFFmpegHook => {
     load();
   }, []);
 
+  const reset = useCallback(() => {
+    setProgress(0);
+    setTranspilingStarted(false);
+    setTranspilingFinished(false);
+    setFinishedVideoUrl(null);
+    ffmpegRef.current.terminate();
+  }, []);
   const generateVideo = async ({ backgroundColor, mockup, mockupBackgroundColor, phoneSizePercentage, verticalOffset, videoFile, canvasHeight, canvasWidth }: GenerateVideoParams): Promise<void> => {
     if (!ffmpegRef.current || !ffmpegRef.current.loaded) {
-      throw new Error("FFmpeg is not loaded yet.");
+      console.log("FFmpeg not loaded, loading now...");
+      await load();
     }
     const ffmpeg = ffmpegRef.current;
     setTranspilingStarted(true);
@@ -157,6 +166,7 @@ const useFFmpeg = (): UseFFmpegHook => {
     transpilingFinished,
     finishedVideoUrl,
     generateVideo,
+    reset,
   };
 };
 

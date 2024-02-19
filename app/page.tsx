@@ -12,7 +12,7 @@ import Image from "next/image";
 import { ChangeEvent, useCallback, useState } from "react";
 
 export default function Home() {
-  const { ffmpeg, isLoaded, isLoading, generateVideo, progress, transpilingFinished, finishedVideoUrl, transpilingStarted } = useFFmpeg();
+  const { ffmpeg, isLoaded, isLoading, generateVideo, progress, reset, transpilingFinished, finishedVideoUrl, transpilingStarted } = useFFmpeg();
   const [selectedMockup, setSelectedMockup] = useState(mockupsDefs[0]);
   const [scale, setScale] = useState(90);
   const [backgroundColor, setBackgroundColor] = useState(colors[0]);
@@ -23,9 +23,14 @@ export default function Home() {
   const handleFileChange = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files && files.length > 0) {
-      setVideoFile(files[0]);
-      console.log("Video file:", files[0]);
+      setVideoFile(null);
+      setTimeout(() => {
+        setVideoFile(files[0]);
+      }, 0);
     }
+  }, []);
+  const removeVideo = useCallback(() => {
+    setVideoFile(null);
   }, []);
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-24" style={{ backgroundColor: backgroundColor + "33" }}>
@@ -65,7 +70,7 @@ export default function Home() {
               </div>
             </div>
             <div
-              className="absolute rounded-[5%] overflow-hidden"
+              className="absolute rounded-[5%] overflow-hidden group-hover/phone:opacity-10 transition-all duration-200 group-hover/phone:blur-sm"
               style={{
                 left: `${((selectedMockup.width - selectedMockup.innerWidth) / selectedMockup.width) * 50}%`,
                 top: `${((selectedMockup.height - selectedMockup.innerHeight) / selectedMockup.height) * 40}%`,
@@ -74,7 +79,7 @@ export default function Home() {
               }}
             >
               {videoFile && (
-                <video controls={false} autoPlay className="w-full h-full" loop>
+                <video controls={false} autoPlay className="w-full h-full " loop>
                   <source src={URL.createObjectURL(videoFile)} />
                 </video>
               )}
@@ -108,6 +113,7 @@ export default function Home() {
               <label className="font-normal mb-0.5 text-black/80 text-xs">Device</label>
               <div className="flex relative items-center w-full">
                 <select
+                  tabIndex={-1}
                   className="appearance-none bg-white/60 rounded-md px-3 py-1 w-full text-xs font-normal text-black/80"
                   onChange={(event) => {
                     setSelectedMockup(mockupsDefs.find((mockup) => mockup.name === event.target.value)!);
@@ -140,6 +146,7 @@ export default function Home() {
               <label className="font-normal mb-0.5 text-black/80 text-xs">Aspec Ratio</label>
               <div className="flex relative items-center w-full">
                 <select
+                  tabIndex={-1}
                   className="appearance-none bg-white/60 rounded-md px-3 py-1 w-full text-xs font-normal text-black/80"
                   onChange={(event) => {
                     setSelectedAspectRatio(aspectRatios.find((ratio) => ratio.name === event.target.value)!);
@@ -152,10 +159,6 @@ export default function Home() {
                       </option>
                     ))}
                   </optgroup>
-                  {/* <optgroup label="Android">
-                  <option value="volvo">Volvo</option>
-                  <option value="saab">Saab</option>
-                </optgroup> */}
                 </select>
 
                 <div className="absolute right-1 text-black/70">
@@ -169,23 +172,57 @@ export default function Home() {
                 </div>
               </div>
               <hr className="my-1.5 border-none" />
-              <label className="font-normal mb-1 text-black/80 text-xs">Size</label>
+              <label className="font-normal mb-1 text-black/80 text-xs flex justify-between items-center">
+                Size
+                <button
+                  className="text-black/50"
+                  onClick={() => {
+                    setScale(90);
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                    <path
+                      fillRule="evenodd"
+                      d="M12.5 9.75A2.75 2.75 0 0 0 9.75 7H4.56l2.22 2.22a.75.75 0 1 1-1.06 1.06l-3.5-3.5a.75.75 0 0 1 0-1.06l3.5-3.5a.75.75 0 0 1 1.06 1.06L4.56 5.5h5.19a4.25 4.25 0 0 1 0 8.5h-1a.75.75 0 0 1 0-1.5h1a2.75 2.75 0 0 0 2.75-2.75Z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </label>
               <Slider
                 defaultValue={[90]}
                 max={150}
                 step={1}
                 min={30}
+                value={[scale]}
                 onValueChange={(value) => {
                   setScale(value[0]);
                 }}
               />
               <hr className="my-1.5 border-none" />
-              <label className="font-normal mb-1 text-black/80 text-xs">Vertical Position</label>
+              <label className="font-normal mb-1 text-black/80 text-xs flex justify-between items-center">
+                Vertical Position
+                <button
+                  className="text-black/50"
+                  onClick={() => {
+                    setVerticalOffset(0);
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                    <path
+                      fillRule="evenodd"
+                      d="M12.5 9.75A2.75 2.75 0 0 0 9.75 7H4.56l2.22 2.22a.75.75 0 1 1-1.06 1.06l-3.5-3.5a.75.75 0 0 1 0-1.06l3.5-3.5a.75.75 0 0 1 1.06 1.06L4.56 5.5h5.19a4.25 4.25 0 0 1 0 8.5h-1a.75.75 0 0 1 0-1.5h1a2.75 2.75 0 0 0 2.75-2.75Z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </label>
               <Slider
                 defaultValue={[0]}
                 max={100}
                 step={1}
                 min={-100}
+                value={[verticalOffset]}
                 onValueChange={(value) => {
                   setVerticalOffset(value[0]);
                 }}
@@ -209,6 +246,54 @@ export default function Home() {
             </PopoverContent>
           </Popover>
         </div>
+        {videoFile && <div className="bottom-2 right-3 absolute text-xs  text-black/50 font-mono">{videoFile?.name}</div>}
+        {transpilingStarted && !transpilingFinished && (
+          <>
+            <div className="absolute transition-all h-full w-full left-0 " />
+            <div
+              className="backdrop-blur-lg absolute transition-all h-full left-0 bg-black/5"
+              style={{
+                width: `${progress}%`,
+              }}
+            />
+            <div className="w-full h-full absolute pointer-events-none " />
+          </>
+        )}
+        {transpilingFinished && finishedVideoUrl && (
+          <div className="backdrop-blur-lg absolute transition-all h-full flex items-center justify-center w-full left-0">
+            <div className="flex flex-col items-center">
+              <button className="flex items-center text-white/100 bg-white/30 hover:scale-105 transition-all ease-in-out shadow-md border-white/5 border backdrop-blur-3xl px-3.5 gap-1 text-sm font-medium py-1 rounded-md">
+                <span>Download Video</span>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
+                  <path d="M8.75 2.75a.75.75 0 0 0-1.5 0v5.69L5.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 0 0-1.06-1.06L8.75 8.44V2.75Z" />
+                  <path d="M3.5 9.75a.75.75 0 0 0-1.5 0v1.5A2.75 2.75 0 0 0 4.75 14h6.5A2.75 2.75 0 0 0 14 11.25v-1.5a.75.75 0 0 0-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5Z" />
+                </svg>
+              </button>
+              <hr className="my-1 border-none" />
+              <button
+                className="flex items-center font-semibold text-white hover:underline underline-offset-2 group/retry drop-shadow-md shadow-black gap-1 text-xs hover:scale-105 ease-in-out"
+                onClick={() => {
+                  setVideoFile(null);
+                  setScale(90);
+                  setBackgroundColor(colors[0]);
+                  setVerticalOffset(0);
+                  setSelectedMockup(mockupsDefs[0]);
+                  setSelectedAspectRatio(aspectRatios[0]);
+                  reset();
+                }}
+              >
+                <span>Start Over</span>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 group-hover/retry:rotate-180 ease-in-out transition-all duration-300">
+                  <path
+                    fillRule="evenodd"
+                    d="M13.836 2.477a.75.75 0 0 1 .75.75v3.182a.75.75 0 0 1-.75.75h-3.182a.75.75 0 0 1 0-1.5h1.37l-.84-.841a4.5 4.5 0 0 0-7.08.932.75.75 0 0 1-1.3-.75 6 6 0 0 1 9.44-1.242l.842.84V3.227a.75.75 0 0 1 .75-.75Zm-.911 7.5A.75.75 0 0 1 13.199 11a6 6 0 0 1-9.44 1.241l-.84-.84v1.371a.75.75 0 0 1-1.5 0V9.591a.75.75 0 0 1 .75-.75H5.35a.75.75 0 0 1 0 1.5H3.98l.841.841a4.5 4.5 0 0 0 7.08-.932.75.75 0 0 1 1.025-.273Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       {videoFile && (
         <button
@@ -228,9 +313,6 @@ export default function Home() {
           generate
         </button>
       )}
-
-      {transpilingStarted && !transpilingFinished && <progress className="w-full" value={progress} max={100} />}
-      {transpilingFinished && finishedVideoUrl && <button onClick={() => window.open(finishedVideoUrl, "_blank")}>Download</button>}
     </main>
   );
 }
