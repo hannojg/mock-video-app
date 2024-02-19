@@ -81,16 +81,17 @@ export default function Home() {
           }}
         >
           <div
-            className="cursor-pointer absolute flex items-center justify-center group/phone"
+            className="cursor-pointer absolute flex items-center justify-center  group/phone "
             style={{
               height: `${scale}%`,
               marginTop: `${verticalOffset}%`,
+              aspectRatio: `${selectedMockup.width}/${selectedMockup.height}`,
             }}
           >
             <div className="h-full w-full flex items-center justify-center cursor-pointer">
-              <div className="absolute w-full h-full bg-white/5 rounded-[20%]  flex flex-col items-center justify-center p-[5%]  group-hover/phone:bg-white/30 transition-colors transform-gpu">
+              <div className="absolute w-full h-full bg-white/5 rounded-[20%]  flex flex-col items-center justify-center p-[5%]  group-hover/phone:bg-white/30 transition-colors transform-gpu ">
                 <div
-                  className="flex flex-col items-center gap-2"
+                  className="flex flex-col items-center gap-2 "
                   style={{
                     transform: `scale(${scale / 100})`,
                     width: `${selectedMockup.innerWidth * 0.1}px`,
@@ -109,7 +110,7 @@ export default function Home() {
                 </div>
               </div>
               <div
-                className="absolute rounded-[5%] overflow-hidden group-hover/phone:opacity-10 transition-all duration-200 group-hover/phone:blur-sm"
+                className="absolute rounded-[5%] overflow-hidden group-hover/phone:opacity-10 transition-all duration-200 group-hover/phone:blur-sm "
                 style={{
                   left: `${((selectedMockup.width - selectedMockup.innerWidth) / selectedMockup.width) * 50}%`,
                   top: `${((selectedMockup.height - selectedMockup.innerHeight) / selectedMockup.height) * 40}%`,
@@ -124,7 +125,14 @@ export default function Home() {
                 )}
               </div>
 
-              <Image priority src={selectedMockup.imageRelative} alt={selectedMockup.name + " mockup"} width={selectedMockup.width} height={selectedMockup.height} className="h-full w-full relative" />
+              <Image
+                priority
+                src={selectedMockup.imageRelative}
+                alt={selectedMockup.name + " mockup"}
+                width={selectedMockup.width}
+                height={selectedMockup.height}
+                className="h-full w-full relative object-contain"
+              />
               <label className="w-full h-full absolute cursor-pointer top-0">
                 <input type="file" className="hidden" accept="video/*" onChange={handleFileChange} />
               </label>
