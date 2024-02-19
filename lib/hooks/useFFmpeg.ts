@@ -84,7 +84,7 @@ const useFFmpeg = (): UseFFmpegHook => {
       const posX = (canvasWidth - mockupWidth) / 2;
       const posY = (canvasHeight - mockupHeight) / 2;
       const offsetInPixels = (verticalOffset / 100) * canvasHeight;
-      const adjustedPosY = posY + offsetInPixels;
+      const adjustedPosY = (posY + offsetInPixels) * 0.9;
       const offsetX = (mockupWidth - mockupInnerWidth) / 2;
       const offsetY = (mockupHeight - mockupInnerHeight) / 2;
 
