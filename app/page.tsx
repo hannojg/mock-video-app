@@ -25,7 +25,6 @@ export default function Home() {
     const files = event.target.files;
     if (files && files.length > 0) {
       setVideoFile(files[0]);
-      console.log("Video file selected:", files[0].name);
     }
 
     setTimeout(() => {
@@ -35,11 +34,10 @@ export default function Home() {
   useEffect(() => {
     if (videoFile) {
       const url = URL.createObjectURL(videoFile);
-      console.log("Generated video URL:", url); // Debugging: Check the generated URL
+
       setVideoUrl(url);
 
       return () => {
-        console.log("Revoking video URL:", url); // Debugging: Ensure URLs are revoked
         URL.revokeObjectURL(url);
       };
     }
@@ -69,7 +67,7 @@ export default function Home() {
                   width: `${selectedMockup.innerWidth * 0.1}px`,
                 }}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4 opacity-50 ">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4 opacity-20 ">
                   <path d="M7.25 11.5a.75.75 0 0 0 0 1.5h1.5a.75.75 0 0 0 0-1.5h-1.5Z" />
                   <path
                     fillRule="evenodd"
@@ -78,7 +76,7 @@ export default function Home() {
                   />
                 </svg>
 
-                <p className="text-xs text-center text-black/70 max-w-full">Click here to upload a screen recording of your app</p>
+                <p className="text-xs text-center text-black/50 max-w-full">Click here to upload a screen recording of your app</p>
               </div>
             </div>
             <div
@@ -348,6 +346,7 @@ export default function Home() {
           </div>
         )}
       </div>
+      <div className="text-xs text-black/30 bottom-3 absolute">© Laurids Kern {new Date().getFullYear()}</div>
     </main>
   );
 }
