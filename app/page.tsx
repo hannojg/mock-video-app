@@ -33,9 +33,9 @@ export default function Home() {
     setVideoFile(null);
   }, []);
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24" style={{ backgroundColor: backgroundColor + "33" }}>
+    <main className="flex min-h-screen flex-col items-center justify-center p-[5%]" style={{ backgroundColor: backgroundColor + "33" }}>
       <div
-        className="border border-black/5 rounded-xl shadow-2xlshadow-black/15 min-w-[70%] group max-w-[80%] relative flex justify-center items-center overflow-hidden transition-all ease-in-out duration-300"
+        className="border border-black/5 rounded-xl shadow-2xl shadow-black/5 lg:min-w-max group w-full lg:max-w-[70%] relative flex justify-center items-center overflow-hidden transition-all ease-in-out duration-300"
         style={{
           backgroundColor: backgroundColor,
           aspectRatio: `${selectedAspectRatio.width}/${selectedAspectRatio.height}`,
@@ -246,7 +246,7 @@ export default function Home() {
             </PopoverContent>
           </Popover>
         </div>
-        {videoFile && <div className="bottom-2 right-3 absolute text-xs  text-black/50 font-mono">{videoFile?.name}</div>}
+        {videoFile && <div className="bottom-3 right-4 absolute text-xs  text-black/50 font-mono">{videoFile?.name + " - " + Math.fround(videoFile.size / 1000000).toPrecision(3) + "/Mb"}</div>}
         {transpilingStarted && !transpilingFinished && (
           <>
             <div className="absolute transition-all h-full w-full left-0 " />
@@ -257,12 +257,23 @@ export default function Home() {
               }}
             />
             <div className="w-full h-full absolute pointer-events-none " />
+            <div className="text-xs bottom-3 left-4 text-black/50 font-mono absolute ">
+              <span>Generating video... {Math.min(Math.round(progress), 100)}%</span>
+            </div>
           </>
         )}
         {transpilingFinished && finishedVideoUrl && (
           <div className="backdrop-blur-lg absolute transition-all h-full flex items-center justify-center w-full left-0">
             <div className="flex flex-col items-center">
-              <button className="flex items-center text-white/100 bg-white/30 hover:scale-105 transition-all ease-in-out shadow-md border-white/5 border backdrop-blur-3xl px-3.5 gap-1 text-sm font-medium py-1 rounded-md">
+              <button
+                className="flex items-center text-white/100 bg-white/30 hover:scale-105 transition-all ease-in-out shadow-md border-white/5 border backdrop-blur-3xl px-3.5 gap-1 text-sm font-medium py-1 rounded-md"
+                onClick={() => {
+                  const a = document.createElement("a");
+                  a.href = finishedVideoUrl;
+                  a.download = "mockup.mp4";
+                  a.click();
+                }}
+              >
                 <span>Download Video</span>
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
                   <path d="M8.75 2.75a.75.75 0 0 0-1.5 0v5.69L5.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 0 0-1.06-1.06L8.75 8.44V2.75Z" />
