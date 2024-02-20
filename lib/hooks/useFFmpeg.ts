@@ -87,6 +87,9 @@ const useFFmpeg = (): UseFFmpegHook => {
       const adjustedPosY = (posY + offsetInPixels) * 0.9;
       const offsetX = (mockupWidth - mockupInnerWidth) / 2;
       const offsetY = (mockupHeight - mockupInnerHeight) / 2;
+      const borderRadius = mockup.cornerRadius * (mockupHeight / mockup.height) * mockupScale;
+      const softEdgesThreshold = 1;
+      const outwardShift = -2;
 
       console.table({
         canvasWidth,
@@ -101,19 +104,22 @@ const useFFmpeg = (): UseFFmpegHook => {
         offsetX,
         offsetY,
         verticalOffset,
+        adjustedPosY,
+        borderRadius,
       });
-      const borderRadius = 60;
+
       const geqFilterExpression = `
       geq=lum='p(X,Y)':a='if(gt(abs(W/2-X),W/2-${borderRadius})*gt(abs(H/2-Y),H/2-${borderRadius}),
-      if(lte(hypot(${borderRadius}-(W/2-abs(W/2-X)),${borderRadius}-(H/2-abs(H/2-Y))),${borderRadius}),255,0),255)'
-      `.trim();
+      if(lte(hypot(${borderRadius}-(W/2-abs(W/2-X)),${borderRadius}-(H/2-abs(H/2-Y))),${borderRadius}+${softEdgesThreshold}), 
+      max(0, min(255, 255 * (1 - (hypot(${borderRadius}-(W/2-abs(W/2-X)), ${borderRadius}-(H/2-abs(H/2-Y))) - ${borderRadius}) / ${softEdgesThreshold}))), 0), 255)'
+    `.trim();
 
       const filterComplex = `
       [1:v]scale=${mockupInnerWidth}:${mockupInnerHeight},format=yuva420p,${geqFilterExpression}[video_scaled];
-      color=c=${mockupBackgroundColor}:s=${Math.round(mockupInnerWidth * 1.02)}x${Math.round(mockupInnerHeight * 1.02)},format=yuva420p,${geqFilterExpression}[colored_square];
+      color=c=${backgroundColor}:s=${Math.round(mockupInnerWidth * 1.03)}x${Math.round(mockupInnerHeight * 1.01)},format=yuva420p,${geqFilterExpression}[colored_square];
       [0:v][colored_square]overlay=x=${Math.round((posX + offsetX) * 0.99)}:y=${Math.round((adjustedPosY + offsetY) * 0.99)}[bg_with_square];
-      [bg_with_square][video_scaled]overlay=x=${posX + offsetX}:y=${adjustedPosY + offsetY}[video_with_bg];
-      [2:v]scale=${mockupWidth}:${mockupHeight}[mockup_scaled];
+      [bg_with_square][video_scaled]overlay=x=${Math.round((posX + offsetX) * 0.999)}:y=${Math.round((adjustedPosY + offsetY) * 1.00001)}[video_with_bg];
+      [2:v]scale=${mockupWidth}:${mockupHeight}:flags=lanczos,format=yuva420p[mockup_scaled];
       [video_with_bg][mockup_scaled]overlay=x=${posX}:y=${adjustedPosY}
       `.trim();
 

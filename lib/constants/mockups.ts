@@ -5,6 +5,7 @@ export type Mockup = {
   innerHeight: number;
   width: number;
   height: number;
+  cornerRadius: number;
 };
 
 export const mockupsDefs = [
@@ -15,6 +16,7 @@ export const mockupsDefs = [
     innerHeight: 2532,
     width: 1314,
     height: 2658,
+    cornerRadius: 160,
   },
   {
     name: "iPhone 13 Pro",
@@ -23,6 +25,7 @@ export const mockupsDefs = [
     innerHeight: 2532,
     width: 1315,
     height: 2658,
+    cornerRadius: 160,
   },
   {
     name: "iPhone 14",
@@ -31,6 +34,7 @@ export const mockupsDefs = [
     innerHeight: 2532,
     width: 1313,
     height: 2656,
+    cornerRadius: 160,
   },
   {
     name: "iPhone 14 Pro",
@@ -39,6 +43,7 @@ export const mockupsDefs = [
     innerHeight: 2556,
     width: 1312,
     height: 2672,
+    cornerRadius: 160,
   },
   {
     name: "iPhone 15",
@@ -47,6 +52,7 @@ export const mockupsDefs = [
     innerHeight: 2556,
     width: 1316,
     height: 2674,
+    cornerRadius: 160,
   },
   {
     name: "iPhone 15 Pro",
@@ -55,5 +61,6 @@ export const mockupsDefs = [
     innerHeight: 2556,
     width: 1293,
     height: 2656,
+    cornerRadius: 160,
   },
 ];
