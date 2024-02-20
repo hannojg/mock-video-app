@@ -96,14 +96,17 @@ export default function Home() {
       </div>
       <div className="w-full h-full justify-center items-center flex relative">
         <div
-          className="border border-black/5 rounded-xl shadow-2xl shadow-black/5 lg:min-w-max group w-full lg:max-w-[65%] relative flex justify-center items-center transition-all ease-in-out duration-300 overflow-hidden"
+          className="border border-black/5 rounded-xl shadow-2xl shadow-black/5 group relative flex justify-center items-center transition-all ease-in-out duration-300 overflow-hidden"
           style={{
+            height: "100%",
+            width: `calc(60vh * ${selectedAspectRatio.width}/${selectedAspectRatio.height})`,
+            maxHeight: "60vh",
             backgroundColor: backgroundColor,
             aspectRatio: `${selectedAspectRatio.width}/${selectedAspectRatio.height}`,
           }}
         >
           <div
-            className="cursor-pointer absolute flex items-center justify-center  group/phone "
+            className="cursor-pointer absolute flex items-center justify-center group/phone"
             style={{
               height: `${scale}%`,
               marginTop: `${verticalOffset}%`,
@@ -111,15 +114,15 @@ export default function Home() {
             }}
           >
             <div className="h-full w-full flex items-center justify-center cursor-pointer">
-              <div className="absolute w-full h-full bg-white/5 rounded-[20%]  flex flex-col items-center justify-center p-[5%]  group-hover/phone:bg-white/30 transition-colors transform-gpu ">
+              <div className="absolute w-full h-full bg-white/5 rounded-[20%]  flex flex-col items-center justify-center p-[5%] group-hover/phone:bg-white/30 transition-colors transform-gpu">
                 <div
                   className="flex flex-col items-center gap-2 "
                   style={{
                     transform: `scale(${scale / 100})`,
-                    width: `${selectedMockup.innerWidth * 0.1}px`,
+                    width: `calc(100%)`,
                   }}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4 opacity-20 ">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4 opacity-20 lg:w-5 lg:h-5">
                     <path d="M7.25 11.5a.75.75 0 0 0 0 1.5h1.5a.75.75 0 0 0 0-1.5h-1.5Z" />
                     <path
                       fillRule="evenodd"
@@ -128,7 +131,7 @@ export default function Home() {
                     />
                   </svg>
 
-                  <p className="text-xs text-center text-black/50 max-w-full">Click or drag here to add a screen recording of your app</p>
+                  <p className="text-xs lg:text-sm text-center text-black/50 max-w-full">Click or drag here to add a screen recording of your app</p>
                 </div>
                 {/* {isDragOver && <div className="w-full h-full absolute bg-white/80 backdrop-blur-lg pointer-events-none flex items-center justify-center text-black/70 text-xs">Drop video here</div>} */}
               </div>
@@ -347,7 +350,9 @@ export default function Home() {
             </div>
           )}
           {videoFile && !transpilingStarted && !transpilingFinished && (
-            <div className="bottom-3 right-4 absolute text-xs  text-black/50 font-mono">{smartTrim(videoFile?.name, 16) + " | " + Math.fround(videoFile.size / 1000000).toPrecision(3) + "/Mb"}</div>
+            <div className="hidden sm:block bottom-3 right-4 absolute text-xs  text-black/50 font-mono">
+              {smartTrim(videoFile?.name, 16) + " | " + Math.fround(videoFile.size / 1000000).toPrecision(3) + "/Mb"}
+            </div>
           )}
           {transpilingStarted && !transpilingFinished && (
             <>
@@ -408,7 +413,9 @@ export default function Home() {
             </div>
           )}
         </div>
-        <div className="text-xs flex items-center text-black/50 gap-0.5 absolute -bottom-8">
+      </div>
+      <div className="flex-1 flex flex-col justify-between items-center py-3">
+        <div className="text-xs flex items-start text-black/50 gap-x-0.5 mx-8">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4 ">
             <path
               fillRule="evenodd"
@@ -416,11 +423,9 @@ export default function Home() {
               clipRule="evenodd"
             />
           </svg>
-          This app runs 100% locally (using ffmpeg.wasm), so your video data never leaves your device.
+          <span className="flex-1 flex">This app runs 100% locally (using ffmpeg.wasm), so your video data never leaves your device.</span>
         </div>
-      </div>
-      <div className="flex-1 flex flex-col justify-end pb-3">
-        <div className="text-xs text-black/30 ">© Laurids Kern {new Date().getFullYear()}</div>
+        <div className="text-xs text-black/30">© Laurids Kern {new Date().getFullYear()}</div>
       </div>
     </main>
   );
