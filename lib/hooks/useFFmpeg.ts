@@ -87,9 +87,8 @@ const useFFmpeg = (): UseFFmpegHook => {
       const adjustedPosY = (posY + offsetInPixels) * 0.9;
       const offsetX = (mockupWidth - mockupInnerWidth) / 2;
       const offsetY = (mockupHeight - mockupInnerHeight) / 2;
-      const borderRadius = mockup.cornerRadius * (mockupHeight / mockup.height) * mockupScale;
+      const borderRadius = mockup.cornerRadius * (mockupHeight / mockup.height);
       const softEdgesThreshold = 1;
-      const outwardShift = -2;
 
       console.table({
         canvasWidth,

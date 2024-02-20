@@ -384,7 +384,7 @@ export default function Home() {
                 </button>
                 <hr className="my-1 border-none" />
                 <button
-                  className="flex items-center font-semibold text-white hover:underline underline-offset-2 group/retry drop-shadow-md shadow-black gap-1 text-xs hover:scale-105 ease-in-out"
+                  className="flex items-center font-semibold text-white hover:underline underline-offset-2 group/retry drop-shadow-sm  shadow-black gap-1 text-xs hover:scale-105 ease-in-out"
                   onClick={() => {
                     setVideoFile(null);
                     setScale(90);
