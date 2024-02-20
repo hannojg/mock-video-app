@@ -118,8 +118,8 @@ export default function Home() {
                 <div
                   className="flex flex-col items-center gap-2 "
                   style={{
-                    transform: `scale(${scale / 100})`,
-                    width: `calc(100%)`,
+                    transform: `scale(${Math.max(Math.min(scale / 100, 1), 0.6)})`,
+                    width: "90%",
                   }}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4 opacity-20 lg:w-5 lg:h-5">
@@ -373,7 +373,7 @@ export default function Home() {
             <div className="bg-white/20 backdrop-blur-md absolute transition-all h-full flex items-center justify-center w-full left-0">
               <div className="flex flex-col items-center">
                 <button
-                  className="flex items-center text-black/70 bg-white/90 hover:scale-105 transition-all ease-in-out shadow-md border-white/5 border backdrop-blur-3xl px-3.5 gap-1 text-sm font-medium py-1 rounded-md"
+                  className="flex items-center text-black/70 bg-white/90 hover:scale-105 transition-all ease-in-out shadow-md  border-black/10 border backdrop-blur-3xl px-3.5 gap-1 text-sm font-medium py-1 rounded-md "
                   onClick={() => {
                     const a = document.createElement("a");
                     a.href = finishedVideoUrl;
