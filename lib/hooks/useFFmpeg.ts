@@ -163,14 +163,13 @@ const useFFmpeg = (): UseFFmpegHook => {
 
   const load = async () => {
     setIsLoading(true);
-    const baseURL = "https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/umd";
+    const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
     const ffmpeg = ffmpegRef.current;
     ffmpeg.on("log", ({ message }) => console.log(message));
     try {
       await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-        workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript"),
+        coreURL: `${baseURL}/ffmpeg-core.js`,
+        wasmURL: `${baseURL}/ffmpeg-core.wasm`,
       });
     } catch (e) {
       console.log(e);
