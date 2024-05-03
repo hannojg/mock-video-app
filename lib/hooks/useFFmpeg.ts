@@ -119,8 +119,6 @@ const useFFmpeg = (): UseFFmpegHook => {
         `color=c=${backgroundColor}:s=${canvasWidth + "x" + canvasHeight}`,
         "-i",
         videoFilename,
-        "-vsync",
-        "0",
         "-i",
         mockupImageFilename,
         "-filter_complex",
@@ -155,7 +153,7 @@ const useFFmpeg = (): UseFFmpegHook => {
 
   const load = async () => {
     setIsLoading(true);
-    const baseURL = "https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/umd";
+    const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
 
     const ffmpeg = ffmpegRef.current;
     ffmpeg.on("log", ({ message }) => console.log(message));
@@ -168,7 +166,7 @@ const useFFmpeg = (): UseFFmpegHook => {
       await ffmpeg.load({
         coreURL: coreURL,
         wasmURL: wasmURL,
-        workerURL: workerURL,
+        // workerURL: workerURL,
       });
       console.log("FFmpeg successfully loaded");
     } catch (e) {
