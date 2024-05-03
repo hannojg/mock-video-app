@@ -120,6 +120,8 @@ const useFFmpeg = (): UseFFmpegHook => {
         "-i",
         videoFilename,
         "-i",
+        "-vsync",
+        "0",
         mockupImageFilename,
         "-filter_complex",
         filterComplex,
