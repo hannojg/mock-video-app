@@ -47,17 +47,7 @@ const useFFmpeg = (): UseFFmpegHook => {
     setFinishedVideoUrl(null);
     ffmpegRef.current.terminate();
   }, []);
-  const generateVideo = async ({
-    backgroundColor,
-    mockup,
-    mockupBackgroundColor,
-    phoneSizePercentage,
-    verticalOffset,
-    videoFile,
-    canvasHeight,
-    canvasWidth,
-    duration,
-  }: GenerateVideoParams): Promise<void> => {
+  const generateVideo = async ({ backgroundColor, mockup, mockupBackgroundColor, phoneSizePercentage, verticalOffset, videoFile, canvasHeight, canvasWidth, duration }: GenerateVideoParams): Promise<void> => {
     if (!ffmpegRef.current || !ffmpegRef.current.loaded) {
       console.log("FFmpeg not loaded, loading now...");
       await load();
@@ -115,7 +105,7 @@ const useFFmpeg = (): UseFFmpegHook => {
 
       const filterComplex = `
       [1:v]scale=${mockupInnerWidth}:${mockupInnerHeight},format=yuva420p,${roundedCornersFilter}[video_scaled];
-      color=c=${backgroundColor}:s=${Math.round(mockupInnerWidth * 1.03)}x${Math.round(mockupInnerHeight * 1.01)},format=yuva420p,${roundedCornersFilter}[colored_square];
+      color=c=${mockupBackgroundColor}:s=${Math.round(mockupInnerWidth * 1.035)}x${Math.round(mockupInnerHeight * 1.02)},format=yuva420p,${roundedCornersFilter}[colored_square];
       [0:v][colored_square]overlay=x=${Math.round((posX + offsetX) * 0.99)}:y=${Math.round((adjustedPosY + offsetY) * 0.99)}[bg_with_square];
       [bg_with_square][video_scaled]overlay=x=${Math.round((posX + offsetX) * 0.999)}:y=${Math.round((adjustedPosY + offsetY) * 1.00001)}[video_with_bg];
       [2:v]scale=${mockupWidth}:${mockupHeight}:flags=lanczos,format=yuva420p[mockup_scaled];
@@ -163,14 +153,18 @@ const useFFmpeg = (): UseFFmpegHook => {
 
   const load = async () => {
     setIsLoading(true);
-    const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+    const baseURL = "https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/umd";
+
     const ffmpeg = ffmpegRef.current;
     ffmpeg.on("log", ({ message }) => console.log(message));
     try {
+      console.log("Loading FFmpeg");
       await ffmpeg.load({
         coreURL: `${baseURL}/ffmpeg-core.js`,
         wasmURL: `${baseURL}/ffmpeg-core.wasm`,
+        workerURL: `${baseURL}/ffmpeg-core.worker.js`,
       });
+      console.log("FFmpeg loaded");
     } catch (e) {
       console.log(e);
     }
