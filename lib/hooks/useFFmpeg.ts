@@ -159,17 +159,22 @@ const useFFmpeg = (): UseFFmpegHook => {
     ffmpeg.on("log", ({ message }) => console.log(message));
     try {
       console.log("Loading FFmpeg");
+      const coreURL = `${baseURL}/ffmpeg-core.js`;
+      const wasmURL = `${baseURL}/ffmpeg-core.wasm`;
+      const workerURL = `${baseURL}/ffmpeg-core.worker.js`;
+
       await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-        workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript"),
+        coreURL: coreURL,
+        wasmURL: wasmURL,
+        workerURL: workerURL,
       });
-      console.log("FFmpeg loaded");
+      console.log("FFmpeg successfully loaded");
     } catch (e) {
-      console.log(e);
+      console.error("Error loading FFmpeg:", e);
+    } finally {
+      setIsLoaded(true);
+      setIsLoading(false);
     }
-    setIsLoaded(true);
-    setIsLoading(false);
   };
 
   return {
