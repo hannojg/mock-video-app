@@ -8,7 +8,7 @@ import useFFmpeg from "@/lib/hooks/useFFmpeg";
 import { cn } from "@/lib/utils";
 import { smartTrim } from "@/lib/utils/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@radix-ui/react-popover";
-
+import clsx from "clsx";
 import Image from "next/image";
 import { ChangeEvent, DragEvent, DragEventHandler, useCallback, useEffect, useRef, useState } from "react";
 
@@ -22,6 +22,7 @@ export default function Home() {
   const [videoUrl, setVideoUrl] = useState<string>("");
   const [verticalOffset, setVerticalOffset] = useState(0);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [selectedFramerate, setSelectedFramerate] = useState(30);
   const [selectedAspectRatio, setSelectedAspectRatio] = useState(aspectRatios[0]);
 
   const handleFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
@@ -87,7 +88,10 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center px-[5%]" style={{ backgroundColor: backgroundColor + "33" }}>
+    <main
+      className="flex min-h-screen flex-col items-center justify-center px-[5%]"
+      style={{ backgroundColor: backgroundColor + "33" }}
+    >
       <div className="flex-1 flex flex-col text-center justify-center items-center">
         <span className="text-base text-black/70 font-medium mb-1">Video Mockup Generator</span>
         {/* <span className="text-black/50 text-xs">1. Select video</span>
@@ -122,7 +126,12 @@ export default function Home() {
                     width: "90%",
                   }}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4 opacity-20 lg:w-5 lg:h-5">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    className="w-4 h-4 opacity-20 lg:w-5 lg:h-5"
+                  >
                     <path d="M7.25 11.5a.75.75 0 0 0 0 1.5h1.5a.75.75 0 0 0 0-1.5h-1.5Z" />
                     <path
                       fillRule="evenodd"
@@ -145,7 +154,17 @@ export default function Home() {
                 }}
               >
                 {videoFile && (
-                  <video controls={false} muted autoPlay className="w-full h-full " key={videoUrl} loop playsInline unselectable="on" ref={videoRef}>
+                  <video
+                    controls={false}
+                    muted
+                    autoPlay
+                    className="w-full h-full "
+                    key={videoUrl}
+                    loop
+                    playsInline
+                    unselectable="on"
+                    ref={videoRef}
+                  >
                     <source src={videoUrl} />
                   </video>
                 )}
@@ -159,8 +178,18 @@ export default function Home() {
                 height={selectedMockup.height}
                 className="h-full w-full relative object-contain"
               />
-              <label className="w-full h-full absolute cursor-pointer top-0" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
-                <input type="file" className="hidden" accept="video/*" onChange={handleFileChange} />
+              <label
+                className="w-full h-full absolute cursor-pointer top-0"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="video/*"
+                  onChange={handleFileChange}
+                />
               </label>
             </div>
           </div>
@@ -179,11 +208,17 @@ export default function Home() {
                   mockupBackgroundColor: "black",
                   verticalOffset,
                   duration: videoRef.current?.duration!,
+                  frameRate: selectedFramerate,
                 });
               }}
             >
               <span>Generate Video</span>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                className="w-3.5 h-3.5"
+              >
                 <path
                   fillRule="evenodd"
                   d="M9.58 1.077a.75.75 0 0 1 .405.82L9.165 6h4.085a.75.75 0 0 1 .567 1.241l-6.5 7.5a.75.75 0 0 1-1.302-.638L6.835 10H2.75a.75.75 0 0 1-.567-1.241l6.5-7.5a.75.75 0 0 1 .897-.182Z"
@@ -198,7 +233,11 @@ export default function Home() {
                 <PopoverTrigger>
                   <div className="w-8 h-8 bg-black/5 p-1.5 rounded-full group-hover:scale-125 ease-springy transform-gpu transition-all duration-300 hover:bg-black/10 hover:ease-in-out">
                     <div className="w-full h-full text-black/40">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                      >
                         <path
                           d="M9.66852 16.5404L7.67137 19.7958C6.8191 21.185 4.89246 21.4125 3.74002 20.2601C2.58758 19.1076 2.81511 17.181 4.20431 16.3287L7.45968 14.3316C7.73521 14.1625 7.78034 13.7804 7.55177 13.5518L6.41423 12.4143C5.63317 11.6332 5.63317 10.3669 6.41423 9.58586L7.14646 8.85363C7.34173 8.65837 7.65831 8.65837 7.85357 8.85363L15.1465 16.1465C15.3417 16.3418 15.3417 16.6584 15.1465 16.8536L14.4142 17.5859C13.6332 18.3669 12.3669 18.3669 11.5858 17.5859L10.4483 16.4483C10.2197 16.2198 9.83756 16.2649 9.66852 16.5404Z"
                           fill="currentColor"
@@ -224,7 +263,10 @@ export default function Home() {
                     >
                       <optgroup label="iPhone">
                         {mockupsDefs.map((mockup) => (
-                          <option key={mockup.name} value={mockup.name}>
+                          <option
+                            key={mockup.name}
+                            value={mockup.name}
+                          >
                             {mockup.name}
                           </option>
                         ))}
@@ -236,7 +278,12 @@ export default function Home() {
                     </select>
 
                     <div className="absolute right-1 text-black/70">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 16 16"
+                        fill="currentColor"
+                        className="w-4 h-4"
+                      >
                         <path
                           fillRule="evenodd"
                           d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z"
@@ -257,14 +304,22 @@ export default function Home() {
                       }}
                     >
                       {aspectRatios.map((ratio) => (
-                        <option key={ratio.name} value={ratio.name}>
+                        <option
+                          key={ratio.name}
+                          value={ratio.name}
+                        >
                           {ratio.name}
                         </option>
                       ))}
                     </select>
 
                     <div className="absolute right-1 text-black/70">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 16 16"
+                        fill="currentColor"
+                        className="w-4 h-4"
+                      >
                         <path
                           fillRule="evenodd"
                           d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z"
@@ -282,7 +337,12 @@ export default function Home() {
                         setScale(90);
                       }}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 16 16"
+                        fill="currentColor"
+                        className="w-3 h-3"
+                      >
                         <path
                           fillRule="evenodd"
                           d="M12.5 9.75A2.75 2.75 0 0 0 9.75 7H4.56l2.22 2.22a.75.75 0 1 1-1.06 1.06l-3.5-3.5a.75.75 0 0 1 0-1.06l3.5-3.5a.75.75 0 0 1 1.06 1.06L4.56 5.5h5.19a4.25 4.25 0 0 1 0 8.5h-1a.75.75 0 0 1 0-1.5h1a2.75 2.75 0 0 0 2.75-2.75Z"
@@ -310,7 +370,12 @@ export default function Home() {
                         setVerticalOffset(0);
                       }}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 16 16"
+                        fill="currentColor"
+                        className="w-3 h-3"
+                      >
                         <path
                           fillRule="evenodd"
                           d="M12.5 9.75A2.75 2.75 0 0 0 9.75 7H4.56l2.22 2.22a.75.75 0 1 1-1.06 1.06l-3.5-3.5a.75.75 0 0 1 0-1.06l3.5-3.5a.75.75 0 0 1 1.06 1.06L4.56 5.5h5.19a4.25 4.25 0 0 1 0 8.5h-1a.75.75 0 0 1 0-1.5h1a2.75 2.75 0 0 0 2.75-2.75Z"
@@ -329,6 +394,38 @@ export default function Home() {
                       setVerticalOffset(value[0]);
                     }}
                   />
+                  <hr className="my-1.5 border-none" />
+                  <label className="font-normal mb-1 text-black/80 text-xs flex justify-between items-center">Framerate</label>
+
+                  <div
+                    className="bg-stone-900/5 rounded-lg text-black/70"
+                    style={{ padding: 2 }}
+                  >
+                    <div className="relative flex items-center">
+                      {/* <div className="absolute w-full">
+                        <div className="w-1/2 flex justify-between m-auto">
+                          <div className={clsx("h-3 w-px bg-gray-400 rounded-full opacity-0 transition-opacity duration-100 ease-in-out", selectedFramerate === 30 && "opacity-100")}></div>
+                          <div className={clsx("h-3 w-px bg-gray-400 rounded-full opacity-0 transition-opacity duration-100 ease-in-out", selectedFramerate === 60 && "opacity-100")}></div>
+                        </div>
+                      </div> */}
+
+                      <div className={clsx("absolute left-0 inset-y-0 w-1/2 flex bg-white transition-all ease-in-out duration-200 transform rounded-md shadow", selectedFramerate === 30 && "translate-x-0", selectedFramerate === 60 && "translate-x-full")}></div>
+
+                      <button
+                        className="relative flex-1 flex text-xs font-semibold capitalize items-center justify-center cursor-pointer m-px p-px"
+                        onClick={() => setSelectedFramerate(30)}
+                      >
+                        30
+                      </button>
+                      <button
+                        className="relative flex-1 flex text-xs font-semibold capitalize items-center justify-center cursor-pointer m-px p-px"
+                        onClick={() => setSelectedFramerate(60)}
+                      >
+                        60
+                      </button>
+                    </div>
+                  </div>
+
                   <hr className="my-1.5 border-none" />
                   <label className="font-normal mb-1 text-black/80 text-xs">Background Color</label>
                   <div className="flex gap-2 overflow-auto pb-2">
@@ -349,11 +446,7 @@ export default function Home() {
               </Popover>
             </div>
           )}
-          {videoFile && !transpilingStarted && !transpilingFinished && (
-            <div className="hidden sm:block bottom-3 right-4 absolute text-xs  text-black/50 font-mono">
-              {smartTrim(videoFile?.name, 16) + " | " + Math.fround(videoFile.size / 1000000).toPrecision(3) + "/Mb"}
-            </div>
-          )}
+          {videoFile && !transpilingStarted && !transpilingFinished && <div className="hidden sm:block bottom-3 right-4 absolute text-xs  text-black/50 font-mono">{smartTrim(videoFile?.name, 16) + " | " + Math.fround(videoFile.size / 1000000).toPrecision(3) + "/Mb"}</div>}
           {transpilingStarted && !transpilingFinished && (
             <>
               <div className="absolute transition-all h-full w-full left-0 " />
@@ -382,7 +475,12 @@ export default function Home() {
                   }}
                 >
                   <span>Download Video</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    className="w-4 h-4"
+                  >
                     <path d="M8.75 2.75a.75.75 0 0 0-1.5 0v5.69L5.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 0 0-1.06-1.06L8.75 8.44V2.75Z" />
                     <path d="M3.5 9.75a.75.75 0 0 0-1.5 0v1.5A2.75 2.75 0 0 0 4.75 14h6.5A2.75 2.75 0 0 0 14 11.25v-1.5a.75.75 0 0 0-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5Z" />
                   </svg>
@@ -401,7 +499,12 @@ export default function Home() {
                   }}
                 >
                   <span>Start Over</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 group-hover/retry:rotate-180 ease-in-out transition-all duration-300">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    className="w-3.5 h-3.5 group-hover/retry:rotate-180 ease-in-out transition-all duration-300"
+                  >
                     <path
                       fillRule="evenodd"
                       d="M13.836 2.477a.75.75 0 0 1 .75.75v3.182a.75.75 0 0 1-.75.75h-3.182a.75.75 0 0 1 0-1.5h1.37l-.84-.841a4.5 4.5 0 0 0-7.08.932.75.75 0 0 1-1.3-.75 6 6 0 0 1 9.44-1.242l.842.84V3.227a.75.75 0 0 1 .75-.75Zm-.911 7.5A.75.75 0 0 1 13.199 11a6 6 0 0 1-9.44 1.241l-.84-.84v1.371a.75.75 0 0 1-1.5 0V9.591a.75.75 0 0 1 .75-.75H5.35a.75.75 0 0 1 0 1.5H3.98l.841.841a4.5 4.5 0 0 0 7.08-.932.75.75 0 0 1 1.025-.273Z"
@@ -416,7 +519,12 @@ export default function Home() {
       </div>
       <div className="flex-1 flex flex-col justify-between items-center py-3">
         <div className="text-xs flex items-start text-black/50 gap-x-0.5 mx-8">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4 ">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            className="w-4 h-4 "
+          >
             <path
               fillRule="evenodd"
               d="M8.5 1.709a.75.75 0 0 0-1 0 8.963 8.963 0 0 1-4.84 2.217.75.75 0 0 0-.654.72 10.499 10.499 0 0 0 5.647 9.672.75.75 0 0 0 .694-.001 10.499 10.499 0 0 0 5.647-9.672.75.75 0 0 0-.654-.719A8.963 8.963 0 0 1 8.5 1.71Zm2.34 5.504a.75.75 0 0 0-1.18-.926L7.394 9.17l-1.156-.99a.75.75 0 1 0-.976 1.138l1.75 1.5a.75.75 0 0 0 1.078-.106l2.75-3.5Z"

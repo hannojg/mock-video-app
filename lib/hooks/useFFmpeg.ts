@@ -13,6 +13,7 @@ type GenerateVideoParams = {
   mockupBackgroundColor: string;
   verticalOffset: number;
   duration: number;
+  frameRate: number;
 };
 
 interface UseFFmpegHook {
@@ -47,7 +48,7 @@ const useFFmpeg = (): UseFFmpegHook => {
     setFinishedVideoUrl(null);
     ffmpegRef.current.terminate();
   }, []);
-  const generateVideo = async ({ backgroundColor, mockup, mockupBackgroundColor, phoneSizePercentage, verticalOffset, videoFile, canvasHeight, canvasWidth, duration }: GenerateVideoParams): Promise<void> => {
+  const generateVideo = async ({ backgroundColor, mockup, mockupBackgroundColor, phoneSizePercentage, verticalOffset, videoFile, canvasHeight, canvasWidth, duration, frameRate }: GenerateVideoParams): Promise<void> => {
     if (!ffmpegRef.current || !ffmpegRef.current.loaded) {
       console.log("FFmpeg not loaded, loading now...");
       await load();
@@ -104,7 +105,7 @@ const useFFmpeg = (): UseFFmpegHook => {
     `.trim();
 
       const filterComplex = `
-      [1:v]scale=${mockupInnerWidth}:${mockupInnerHeight},format=yuva420p,${roundedCornersFilter}[video_scaled];
+      [1:v]scale=${mockupInnerWidth}:${mockupInnerHeight},fps=fps=${frameRate},format=yuva420p,${roundedCornersFilter}[video_scaled];
       color=c=${mockupBackgroundColor}:s=${Math.round(mockupInnerWidth * 1.035)}x${Math.round(mockupInnerHeight * 1.02)},format=yuva420p,${roundedCornersFilter}[colored_square];
       [0:v][colored_square]overlay=x=${Math.round((posX + offsetX) * 0.99)}:y=${Math.round((adjustedPosY + offsetY) * 0.99)}[bg_with_square];
       [bg_with_square][video_scaled]overlay=x=${Math.round((posX + offsetX) * 0.999)}:y=${Math.round((adjustedPosY + offsetY) * 1.00001)}[video_with_bg];
