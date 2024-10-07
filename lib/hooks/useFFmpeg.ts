@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile, toBlobURL } from "@ffmpeg/util";
-import { Mockup } from "../constants/mockups";
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import { Mockup } from '../constants/mockups';
 
 type GenerateVideoParams = {
   videoFile: File;
@@ -48,9 +48,20 @@ const useFFmpeg = (): UseFFmpegHook => {
     setFinishedVideoUrl(null);
     ffmpegRef.current.terminate();
   }, []);
-  const generateVideo = async ({ backgroundColor, mockup, mockupBackgroundColor, phoneSizePercentage, verticalOffset, videoFile, canvasHeight, canvasWidth, duration, frameRate }: GenerateVideoParams): Promise<void> => {
+  const generateVideo = async ({
+    backgroundColor,
+    mockup,
+    mockupBackgroundColor,
+    phoneSizePercentage,
+    verticalOffset,
+    videoFile,
+    canvasHeight,
+    canvasWidth,
+    duration,
+    frameRate,
+  }: GenerateVideoParams): Promise<void> => {
     if (!ffmpegRef.current || !ffmpegRef.current.loaded) {
-      console.log("FFmpeg not loaded, loading now...");
+      console.log('FFmpeg not loaded, loading now...');
       await load();
     }
     const ffmpeg = ffmpegRef.current;
@@ -59,19 +70,26 @@ const useFFmpeg = (): UseFFmpegHook => {
     setProgress(0);
 
     try {
-      const videoFilename = "input_video.mp4";
-      const mockupImageFilename = "mockup_image.png";
-      const outputFilename = "output_video.mp4";
+      const videoFilename = 'input_video.mp4';
+      const mockupImageFilename = 'mockup_image.png';
+      const outputFilename = 'output_video.mp4';
       await ffmpeg.writeFile(videoFilename, await fetchFile(videoFile));
-      await ffmpeg.writeFile(mockupImageFilename, await fetchFile(mockup.imageRelative));
-      ffmpeg.on("progress", ({ progress }) => {
+      await ffmpeg.writeFile(
+        mockupImageFilename,
+        await fetchFile(mockup.imageRelative)
+      );
+      ffmpeg.on('progress', ({ progress }) => {
         setProgress(progress * 100);
       });
       const mockupScale = phoneSizePercentage / 100;
       const mockupHeight = canvasHeight * mockupScale;
       const mockupWidth = (mockup.width / mockup.height) * mockupHeight;
-      const mockupInnerHeight = Math.round((mockup.innerHeight / mockup.height) * mockupHeight);
-      const mockupInnerWidth = Math.round((mockup.innerWidth / mockup.height) * mockupHeight);
+      const mockupInnerHeight = Math.round(
+        (mockup.innerHeight / mockup.height) * mockupHeight
+      );
+      const mockupInnerWidth = Math.round(
+        (mockup.innerWidth / mockup.height) * mockupHeight
+      );
       const posX = (canvasWidth - mockupWidth) / 2;
       const posY = (canvasHeight - mockupHeight) / 2;
       const offsetInPixels = (verticalOffset / 100) * canvasHeight;
@@ -80,6 +98,9 @@ const useFFmpeg = (): UseFFmpegHook => {
       const offsetY = (mockupHeight - mockupInnerHeight) / 2;
       const borderRadius = mockup.cornerRadius * (mockupHeight / mockup.height);
       const softEdgesThreshold = 1;
+
+      const coloredSquareWidth = Math.round(mockupInnerWidth * 1.01); // Reduced from 1.035
+      const coloredSquareHeight = Math.round(mockupInnerHeight * 1.01); // Reduced from 1.02
 
       console.table({
         canvasWidth,
@@ -105,48 +126,53 @@ const useFFmpeg = (): UseFFmpegHook => {
     `.trim();
 
       const filterComplex = `
-      [1:v]scale=${mockupInnerWidth}:${mockupInnerHeight},fps=fps=${frameRate},format=yuva420p,${roundedCornersFilter}[video_scaled];
-      color=c=${mockupBackgroundColor}:s=${Math.round(mockupInnerWidth * 1.035)}x${Math.round(mockupInnerHeight * 1.02)},format=yuva420p,${roundedCornersFilter}[colored_square];
-      [0:v][colored_square]overlay=x=${Math.round((posX + offsetX) * 0.99)}:y=${Math.round((adjustedPosY + offsetY) * 0.99)}[bg_with_square];
-      [bg_with_square][video_scaled]overlay=x=${Math.round((posX + offsetX) * 0.999)}:y=${Math.round((adjustedPosY + offsetY) * 1.00001)}[video_with_bg];
-      [2:v]scale=${mockupWidth}:${mockupHeight}:flags=lanczos,format=yuva420p[mockup_scaled];
-      [video_with_bg][mockup_scaled]overlay=x=${posX}:y=${adjustedPosY}
-      `.trim();
+    [1:v]scale=${mockupInnerWidth}:${mockupInnerHeight},fps=${frameRate},format=yuva420p,${roundedCornersFilter}[video_scaled];
+    color=c=${mockupBackgroundColor}:s=${coloredSquareWidth}x${coloredSquareHeight}:r=${frameRate},format=yuva420p,${roundedCornersFilter}[colored_square];
+    [0:v]fps=${frameRate}[bg];
+    [bg][colored_square]overlay=x=${Math.round(
+      (posX + offsetX) * 0.995
+    )}:y=${Math.round((adjustedPosY + offsetY) * 0.995)}[bg_with_square];
+    [bg_with_square][video_scaled]overlay=x=${Math.round(
+      (posX + offsetX) * 0.9995
+    )}:y=${Math.round((adjustedPosY + offsetY) * 0.9995)}[video_with_bg];
+    [2:v]scale=${mockupWidth}:${mockupHeight}:flags=lanczos,format=yuva420p[mockup_scaled];
+    [video_with_bg][mockup_scaled]overlay=x=${posX}:y=${adjustedPosY}
+  `.trim();
 
       const args = [
-        "-f",
-        "lavfi",
-        "-i",
-        `color=c=${backgroundColor}:s=${canvasWidth + "x" + canvasHeight}`,
-        "-i",
+        '-f',
+        'lavfi',
+        '-i',
+        `color=c=${backgroundColor}:s=${canvasWidth}x${canvasHeight}:r=${frameRate}`,
+        '-i',
         videoFilename,
-        "-i",
-        // "-vsync",
-        // "0",
+        '-i',
         mockupImageFilename,
-        "-filter_complex",
+        '-filter_complex',
         filterComplex,
-        "-t",
+        '-t',
         duration.toString(),
-        "-map",
-        "0:v",
-        "-c:v",
-        "libx264",
-        "-crf",
-        "28",
-        "-preset",
-        "ultrafast",
-        "-an", // Disable audio
+        '-map',
+        '0:v',
+        '-c:v',
+        'libx264',
+        '-crf',
+        '18',
+        '-preset',
+        'slow',
+        '-r',
+        frameRate.toString(),
+        '-an', // Disable audio
         outputFilename,
       ];
 
       await ffmpeg.exec(args);
       const data = (await ffmpeg.readFile(outputFilename)) as any;
-      const videoBlob = new Blob([data.buffer], { type: "video/mp4" });
+      const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
       const videoUrl = URL.createObjectURL(videoBlob);
       setFinishedVideoUrl(videoUrl);
     } catch (error) {
-      console.error("Error generating video:", error);
+      console.error('Error generating video:', error);
       throw error;
     } finally {
       setTranspilingFinished(true);
@@ -156,12 +182,12 @@ const useFFmpeg = (): UseFFmpegHook => {
 
   const load = async () => {
     setIsLoading(true);
-    const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
 
     const ffmpeg = ffmpegRef.current;
-    ffmpeg.on("log", ({ message }) => console.log(message));
+    ffmpeg.on('log', ({ message }) => console.log(message));
     try {
-      console.log("Loading FFmpeg");
+      console.log('Loading FFmpeg');
       const coreURL = `${baseURL}/ffmpeg-core.js`;
       const wasmURL = `${baseURL}/ffmpeg-core.wasm`;
       const workerURL = `${baseURL}/ffmpeg-core.worker.js`;
@@ -171,9 +197,9 @@ const useFFmpeg = (): UseFFmpegHook => {
         wasmURL: wasmURL,
         // workerURL: workerURL,
       });
-      console.log("FFmpeg successfully loaded");
+      console.log('FFmpeg successfully loaded');
     } catch (e) {
-      console.error("Error loading FFmpeg:", e);
+      console.error('Error loading FFmpeg:', e);
     } finally {
       setIsLoaded(true);
       setIsLoading(false);
