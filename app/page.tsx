@@ -4,7 +4,7 @@ import { Slider } from "@/components/ui/slider";
 import { colors } from "@/lib/constants/colors";
 import { mockupsDefs } from "@/lib/constants/mockups";
 import { aspectRatios } from "@/lib/constants/sizes";
-import useFFmpeg from "@/lib/hooks/useFFmpeg";
+import useMediabunny from "@/lib/hooks/useMediabunny";
 import { cn } from "@/lib/utils";
 import { smartTrim } from "@/lib/utils/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@radix-ui/react-popover";
@@ -13,7 +13,7 @@ import Image from "next/image";
 import { ChangeEvent, DragEvent, DragEventHandler, useCallback, useEffect, useRef, useState } from "react";
 
 export default function Home() {
-  const { ffmpeg, isLoaded, isLoading, generateVideo, progress, reset, transpilingFinished, finishedVideoUrl, transpilingStarted } = useFFmpeg();
+  const { isLoaded, isLoading, generateVideo, progress, reset, transpilingFinished, finishedVideoUrl, transpilingStarted } = useMediabunny();
   const [selectedMockup, setSelectedMockup] = useState(mockupsDefs[0]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [scale, setScale] = useState(90);
@@ -531,7 +531,7 @@ export default function Home() {
               clipRule="evenodd"
             />
           </svg>
-          <span className="flex-1 flex">This app runs 100% locally (using ffmpeg.wasm), so your video data never leaves your device.</span>
+          <span className="flex-1 flex">This app runs 100% locally (using Mediabunny), so your video data never leaves your device.</span>
         </div>
         <div className="text-xs text-black/30">© Laurids Kern {new Date().getFullYear()}</div>
       </div>
