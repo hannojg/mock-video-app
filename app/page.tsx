@@ -4,99 +4,166 @@ import { Slider } from "@/components/ui/slider";
 import { colors } from "@/lib/constants/colors";
 import { mockupsDefs } from "@/lib/constants/mockups";
 import { aspectRatios } from "@/lib/constants/sizes";
-import useMediabunny from "@/lib/hooks/useMediabunny";
+import useMediabunny, { Background } from "@/lib/hooks/useMediabunny";
 import { cn } from "@/lib/utils";
 import { smartTrim } from "@/lib/utils/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@radix-ui/react-popover";
 import clsx from "clsx";
 import Image from "next/image";
-import { ChangeEvent, DragEvent, DragEventHandler, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+type DeviceCount = 1 | 2 | 3;
+type BgTab = "color" | "gradient" | "image";
+
+const backgroundCss = (bg: Background, fallback: string) => {
+  if (bg.type === "color") return bg.color;
+  if (bg.type === "gradient") return `linear-gradient(${bg.angle}deg, ${bg.from}, ${bg.to})`;
+  return fallback;
+};
 
 export default function Home() {
-  const { isLoaded, isLoading, generateVideo, progress, reset, transpilingFinished, finishedVideoUrl, transpilingStarted } = useMediabunny();
+  const { generateVideo, progress, reset, transpilingFinished, finishedVideoUrl, transpilingStarted } = useMediabunny();
   const [selectedMockup, setSelectedMockup] = useState(mockupsDefs[0]);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [scale, setScale] = useState(90);
-  const [backgroundColor, setBackgroundColor] = useState(colors[0]);
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [videoUrl, setVideoUrl] = useState<string>("");
   const [verticalOffset, setVerticalOffset] = useState(0);
-  const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFramerate, setSelectedFramerate] = useState(30);
   const [selectedAspectRatio, setSelectedAspectRatio] = useState(aspectRatios[0]);
+  const [deviceCount, setDeviceCount] = useState<DeviceCount>(1);
+  const [loopShorter, setLoopShorter] = useState(true);
 
-  const handleFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      setVideoFile(files[0]);
-    }
-    setTimeout(() => {
-      event.target.value = "";
-    }, 50);
-  }, []);
+  const [videoFiles, setVideoFiles] = useState<(File | null)[]>([null]);
+  const [videoUrls, setVideoUrls] = useState<string[]>([]);
+  const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
+  const [activeDragIdx, setActiveDragIdx] = useState<number | null>(null);
+
+  const [bgTab, setBgTab] = useState<BgTab>("color");
+  const [solidColor, setSolidColor] = useState<string>(colors[0]);
+  const [gradient, setGradient] = useState({ from: "#a5f3fc", to: "#f5d0fe", angle: 135 });
+  const [bgImageFile, setBgImageFile] = useState<File | null>(null);
+  const [bgImageUrl, setBgImageUrl] = useState<string>("");
+
+  const background: Background = useMemo(() => {
+    if (bgTab === "gradient") return { type: "gradient", ...gradient };
+    if (bgTab === "image" && bgImageFile) return { type: "image", file: bgImageFile };
+    return { type: "color", color: solidColor };
+  }, [bgTab, gradient, bgImageFile, solidColor]);
+
+  const sceneCssBackground = useMemo(() => backgroundCss(background, solidColor), [background, solidColor]);
+
   useEffect(() => {
-    if (videoFile) {
-      const url = URL.createObjectURL(videoFile);
+    setVideoFiles((prev) => {
+      const next = prev.slice(0, deviceCount);
+      while (next.length < deviceCount) next.push(null);
+      return next;
+    });
+  }, [deviceCount]);
 
-      setVideoUrl(url);
-
-      return () => {
-        URL.revokeObjectURL(url);
-      };
-    }
-  }, [videoFile]);
   useEffect(() => {
-    if (videoRef.current) {
-      const videoDuration = videoRef.current.duration;
-      const currentTime = (progress / 100) * videoDuration;
-      videoRef.current.currentTime = currentTime;
+    const urls = videoFiles.map((f) => (f ? URL.createObjectURL(f) : ""));
+    setVideoUrls(urls);
+    return () => {
+      urls.forEach((u) => u && URL.revokeObjectURL(u));
+    };
+  }, [videoFiles]);
+
+  useEffect(() => {
+    if (!bgImageFile) {
+      setBgImageUrl("");
+      return;
     }
+    const url = URL.createObjectURL(bgImageFile);
+    setBgImageUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [bgImageFile]);
+
+  useEffect(() => {
+    const v = videoRefs.current[0];
+    if (!v) return;
+    const dur = v.duration;
+    if (!isFinite(dur) || dur <= 0) return;
+    const t = (progress / 100) * dur;
+    videoRefs.current.forEach((vv) => {
+      if (vv) vv.currentTime = Math.min(t, vv.duration || t);
+    });
   }, [progress]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    if (transpilingStarted) {
-      video.pause();
-    }
-
-    if (transpilingFinished) {
-      video.play();
-    }
+    videoRefs.current.forEach((v) => {
+      if (!v) return;
+      if (transpilingStarted) v.pause();
+      if (transpilingFinished) v.play().catch(() => {});
+    });
   }, [transpilingStarted, transpilingFinished]);
 
-  const handleDragOver = useCallback((event: DragEvent<HTMLLabelElement>) => {
-    console.log("drag over");
-    event.preventDefault();
-    setIsDragOver(true);
+  const setVideoAt = useCallback((idx: number, file: File | null) => {
+    setVideoFiles((prev) => {
+      const next = prev.slice();
+      next[idx] = file;
+      return next;
+    });
   }, []);
-  const handleDragLeave = useCallback((event: DragEvent<HTMLLabelElement>) => {
-    console.log("drag leave");
-    event.preventDefault();
-    setIsDragOver(false);
-  }, []);
-  const handleDrop = useCallback((event: DragEvent<HTMLLabelElement>) => {
-    event.preventDefault();
-    console.log("drag drop");
-    setIsDragOver(false);
 
+  const handleFileChangeAt = useCallback((idx: number) => (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files && files.length > 0) setVideoAt(idx, files[0]);
+    setTimeout(() => { event.target.value = ""; }, 50);
+  }, [setVideoAt]);
+
+  const handleDropAt = useCallback((idx: number) => (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    setActiveDragIdx(null);
     const files = event.dataTransfer.files;
-    if (files && files.length > 0) {
-      setVideoFile(files[0]);
-    }
+    if (files && files.length > 0) setVideoAt(idx, files[0]);
+  }, [setVideoAt]);
+
+  const handleBgImageChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files && files.length > 0) setBgImageFile(files[0]);
+    setTimeout(() => { event.target.value = ""; }, 50);
   }, []);
+
+  const allVideosLoaded = videoFiles.every((f) => f !== null);
+  const anyVideoLoaded = videoFiles.some((f) => f !== null);
+
+  const phoneFlexBasis = `${100 / deviceCount}%`;
+
+  const handleGenerate = () => {
+    const filledFiles = videoFiles.filter((f): f is File => f !== null);
+    if (filledFiles.length !== deviceCount) return;
+    generateVideo({
+      videoFiles: filledFiles,
+      mockup: selectedMockup,
+      background,
+      canvasWidth: selectedAspectRatio.width,
+      canvasHeight: selectedAspectRatio.height,
+      phoneSizePercentage: scale,
+      mockupBackgroundColor: "black",
+      verticalOffset,
+      frameRate: selectedFramerate,
+      loopShorter,
+    });
+  };
+
+  const handleReset = () => {
+    setVideoFiles(Array(deviceCount).fill(null));
+    setScale(90);
+    setBgTab("color");
+    setSolidColor(colors[0]);
+    setGradient({ from: "#a5f3fc", to: "#f5d0fe", angle: 135 });
+    setBgImageFile(null);
+    setVerticalOffset(0);
+    setSelectedMockup(mockupsDefs[0]);
+    setSelectedAspectRatio(aspectRatios[0]);
+    reset();
+  };
 
   return (
     <main
       className="flex min-h-screen flex-col items-center justify-center px-[5%]"
-      style={{ backgroundColor: backgroundColor + "33" }}
+      style={{ backgroundColor: solidColor + "33" }}
     >
       <div className="flex-1 flex flex-col text-center justify-center items-center">
         <span className="text-base text-black/70 font-medium mb-1">Video Mockup Generator</span>
-        {/* <span className="text-black/50 text-xs">1. Select video</span>
-        <span className="text-black/50 text-xs">2. Adjust settings to your liking</span>
-        <span className="text-black/50 text-xs">3. Generate video</span> */}
       </div>
       <div className="w-full h-full justify-center items-center flex relative">
         <div
@@ -105,112 +172,135 @@ export default function Home() {
             height: "100%",
             width: `calc(60vh * ${selectedAspectRatio.width}/${selectedAspectRatio.height})`,
             maxHeight: "60vh",
-            backgroundColor: backgroundColor,
+            background: sceneCssBackground,
             aspectRatio: `${selectedAspectRatio.width}/${selectedAspectRatio.height}`,
           }}
         >
-          <div
-            className="cursor-pointer absolute flex items-center justify-center group/phone"
-            style={{
-              height: `${scale}%`,
-              marginTop: `${verticalOffset}%`,
-              aspectRatio: `${selectedMockup.width}/${selectedMockup.height}`,
-            }}
-          >
-            <div className="h-full w-full flex items-center justify-center cursor-pointer">
-              <div className="absolute w-full h-full bg-white/5 rounded-[20%]  flex flex-col items-center justify-center p-[5%] group-hover/phone:bg-white/30 transition-colors transform-gpu">
+          {bgTab === "image" && bgImageUrl && (
+            <img
+              src={bgImageUrl}
+              alt="background"
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+            />
+          )}
+
+          <div className="absolute inset-0 flex items-center justify-center">
+            {Array.from({ length: deviceCount }).map((_, idx) => {
+              const file = videoFiles[idx];
+              const url = videoUrls[idx];
+              const isDragOver = activeDragIdx === idx;
+              const cellAspect = (selectedAspectRatio.width / selectedAspectRatio.height) / deviceCount;
+              const mockupAspect = selectedMockup.width / selectedMockup.height;
+              const maxScaleByColumn = (cellAspect * 0.97 / mockupAspect) * 100;
+              const sizingScale = Math.min(scale, maxScaleByColumn);
+              return (
                 <div
-                  className="flex flex-col items-center gap-2 "
-                  style={{
-                    transform: `scale(${Math.max(Math.min(scale / 100, 1), 0.6)})`,
-                    width: "90%",
-                  }}
+                  key={idx}
+                  className="relative flex items-center justify-center h-full"
+                  style={{ flexBasis: phoneFlexBasis, flexGrow: 0, flexShrink: 0 }}
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 16 16"
-                    fill="currentColor"
-                    className="w-4 h-4 opacity-20 lg:w-5 lg:h-5"
+                  <div
+                    className="cursor-pointer absolute flex items-center justify-center group/phone"
+                    style={{
+                      height: `${sizingScale}%`,
+                      marginTop: `${verticalOffset}%`,
+                      aspectRatio: `${selectedMockup.width}/${selectedMockup.height}`,
+                    }}
                   >
-                    <path d="M7.25 11.5a.75.75 0 0 0 0 1.5h1.5a.75.75 0 0 0 0-1.5h-1.5Z" />
-                    <path
-                      fillRule="evenodd"
-                      d="M6 1a2.5 2.5 0 0 0-2.5 2.5v9A2.5 2.5 0 0 0 6 15h4a2.5 2.5 0 0 0 2.5-2.5v-9A2.5 2.5 0 0 0 10 1H6Zm4 1.5h-.5V3a.5.5 0 0 1-.5.5H7a.5.5 0 0 1-.5-.5v-.5H6a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1Z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                    <div className="h-full w-full flex items-center justify-center cursor-pointer">
+                      <div className={cn(
+                        "absolute w-full h-full bg-white/5 rounded-[20%] flex flex-col items-center justify-center p-[5%] transition-colors transform-gpu",
+                        !file && "group-hover/phone:bg-white/30",
+                        isDragOver && "bg-white/40",
+                      )}>
+                        {!file && (
+                          <div
+                            className="flex flex-col items-center gap-2"
+                            style={{
+                              transform: `scale(${Math.max(Math.min(sizingScale / 100, 1), 0.5)})`,
+                              width: "90%",
+                            }}
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 16 16"
+                              fill="currentColor"
+                              className="w-4 h-4 opacity-20 lg:w-5 lg:h-5"
+                            >
+                              <path d="M7.25 11.5a.75.75 0 0 0 0 1.5h1.5a.75.75 0 0 0 0-1.5h-1.5Z" />
+                              <path
+                                fillRule="evenodd"
+                                d="M6 1a2.5 2.5 0 0 0-2.5 2.5v9A2.5 2.5 0 0 0 6 15h4a2.5 2.5 0 0 0 2.5-2.5v-9A2.5 2.5 0 0 0 10 1H6Zm4 1.5h-.5V3a.5.5 0 0 1-.5.5H7a.5.5 0 0 1-.5-.5v-.5H6a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1Z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                            <p className="text-xs lg:text-sm text-center text-black/50 max-w-full">
+                              {deviceCount > 1 ? `Add video ${idx + 1}` : "Click or drag here to add a screen recording of your app"}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <div
+                        className={cn(
+                          "absolute rounded-[5%] overflow-hidden transition-all duration-200",
+                          !file && "group-hover/phone:opacity-30 group-hover/phone:blur-sm",
+                        )}
+                        style={{
+                          left: `${((selectedMockup.width - selectedMockup.innerWidth) / selectedMockup.width) * 50}%`,
+                          top: `${((selectedMockup.height - selectedMockup.innerHeight) / selectedMockup.height) * 40}%`,
+                          width: `${(selectedMockup.innerWidth / selectedMockup.width) * 100 * 1.005}%`,
+                          height: `${(selectedMockup.innerHeight / selectedMockup.height) * 100 * 1.01}%`,
+                        }}
+                      >
+                        {file && url && (
+                          <video
+                            controls={false}
+                            muted
+                            autoPlay
+                            className="w-full h-full"
+                            key={url}
+                            loop
+                            playsInline
+                            unselectable="on"
+                            ref={(el) => { videoRefs.current[idx] = el; }}
+                          >
+                            <source src={url} />
+                          </video>
+                        )}
+                      </div>
 
-                  <p className="text-xs lg:text-sm text-center text-black/50 max-w-full">Click or drag here to add a screen recording of your app</p>
+                      <Image
+                        priority
+                        src={selectedMockup.imageRelative}
+                        alt={selectedMockup.name + " mockup"}
+                        width={selectedMockup.width}
+                        height={selectedMockup.height}
+                        className="h-full w-full relative object-contain pointer-events-none"
+                      />
+                      <label
+                        className="w-full h-full absolute cursor-pointer top-0"
+                        onDragOver={(e) => { e.preventDefault(); setActiveDragIdx(idx); }}
+                        onDragLeave={(e) => { e.preventDefault(); setActiveDragIdx(null); }}
+                        onDrop={handleDropAt(idx)}
+                      >
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="video/*"
+                          onChange={handleFileChangeAt(idx)}
+                        />
+                      </label>
+                    </div>
+                  </div>
                 </div>
-                {/* {isDragOver && <div className="w-full h-full absolute bg-white/80 backdrop-blur-lg pointer-events-none flex items-center justify-center text-black/70 text-xs">Drop video here</div>} */}
-              </div>
-              <div
-                className={cn("absolute rounded-[5%] overflow-hidden  transition-all duration-200 group-hover/phone:opacity-30 group-hover/phone:blur-sm")}
-                style={{
-                  left: `${((selectedMockup.width - selectedMockup.innerWidth) / selectedMockup.width) * 50}%`,
-                  top: `${((selectedMockup.height - selectedMockup.innerHeight) / selectedMockup.height) * 40}%`,
-                  width: `${(selectedMockup.innerWidth / selectedMockup.width) * 100 * 1.005}%`,
-                  height: `${(selectedMockup.innerHeight / selectedMockup.height) * 100 * 1.01}%`,
-                }}
-              >
-                {videoFile && (
-                  <video
-                    controls={false}
-                    muted
-                    autoPlay
-                    className="w-full h-full "
-                    key={videoUrl}
-                    loop
-                    playsInline
-                    unselectable="on"
-                    ref={videoRef}
-                  >
-                    <source src={videoUrl} />
-                  </video>
-                )}
-              </div>
-
-              <Image
-                priority
-                src={selectedMockup.imageRelative}
-                alt={selectedMockup.name + " mockup"}
-                width={selectedMockup.width}
-                height={selectedMockup.height}
-                className="h-full w-full relative object-contain"
-              />
-              <label
-                className="w-full h-full absolute cursor-pointer top-0"
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                <input
-                  type="file"
-                  className="hidden"
-                  accept="video/*"
-                  onChange={handleFileChange}
-                />
-              </label>
-            </div>
+              );
+            })}
           </div>
 
-          {videoFile && !transpilingStarted && !transpilingFinished && videoRef.current && (
+          {allVideosLoaded && !transpilingStarted && !transpilingFinished && (
             <button
-              className="flex items-center text-black/70 bg-white/90 hover:scale-105 transition-all ease-in-out shadow-md border-white/5 shadow-black/5 border backdrop-blur-3xl px-3.5 gap-1 text-sm font-medium py-1 rounded-md absolute bottom-3 left-4"
-              onClick={() => {
-                generateVideo({
-                  videoFile,
-                  mockup: selectedMockup,
-                  backgroundColor,
-                  canvasWidth: selectedAspectRatio.width,
-                  canvasHeight: selectedAspectRatio.height,
-                  phoneSizePercentage: scale,
-                  mockupBackgroundColor: "black",
-                  verticalOffset,
-                  duration: videoRef.current?.duration!,
-                  frameRate: selectedFramerate,
-                });
-              }}
+              className="z-10 cursor-pointer flex items-center text-black/70 bg-white/90 hover:scale-105 transition-all ease-in-out shadow-md border-white/5 shadow-black/5 border backdrop-blur-3xl px-3.5 gap-1 text-sm font-medium py-1 rounded-md absolute bottom-3 left-4"
+              onClick={handleGenerate}
             >
               <span>Generate Video</span>
               <svg
@@ -227,11 +317,12 @@ export default function Home() {
               </svg>
             </button>
           )}
+
           {!transpilingStarted && !transpilingFinished && (
-            <div className="absolute top-4 right-4">
+            <div className="absolute top-4 right-4 z-10">
               <Popover>
-                <PopoverTrigger>
-                  <div className="w-8 h-8 bg-black/5 p-1.5 rounded-full group-hover:scale-125 ease-springy transform-gpu transition-all duration-300 hover:bg-black/10 hover:ease-in-out">
+                <PopoverTrigger aria-label="Settings">
+                  <div className="w-8 h-8 bg-black/5 p-1.5 rounded-full group-hover:scale-125 ease-springy transform-gpu transition-all duration-300 hover:bg-black/10 hover:ease-in-out cursor-pointer">
                     <div className="w-full h-full text-black/40">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -250,12 +341,68 @@ export default function Home() {
                     </div>
                   </div>
                 </PopoverTrigger>
-                <PopoverContent className="px-3 py-2 rounded-lg backdrop-blur-3xl shadow-2xl shadow-black/10 bg-black/5 mt-3 ring-1 ring-black/5 PopoverContent flex flex-col w-52 overflow-hidden">
+                <PopoverContent
+                  align="end"
+                  className="px-3 py-2 rounded-lg backdrop-blur-3xl shadow-2xl shadow-black/10 bg-white/70 mt-3 ring-1 ring-black/5 PopoverContent flex flex-col w-64 overflow-hidden max-h-[80vh] overflow-y-auto"
+                >
+                  <label className="font-normal mb-0.5 text-black/80 text-xs">Devices</label>
+                  <div className="bg-stone-900/5 rounded-lg text-black/70" style={{ padding: 2 }}>
+                    <div className="relative flex items-center">
+                      <div
+                        className={clsx(
+                          "absolute inset-y-0 flex bg-white transition-all ease-in-out duration-200 transform rounded-md shadow",
+                        )}
+                        style={{ width: `${100 / 3}%`, left: `${((deviceCount - 1) * 100) / 3}%` }}
+                      />
+                      {[1, 2, 3].map((n) => (
+                        <button
+                          key={n}
+                          className="relative flex-1 flex text-xs font-semibold capitalize items-center justify-center cursor-pointer m-px p-px py-0.5"
+                          onClick={() => setDeviceCount(n as DeviceCount)}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {deviceCount > 1 && (
+                    <>
+                      <hr className="my-1.5 border-none" />
+                      <label className="font-normal mb-0.5 text-black/80 text-xs flex items-center justify-between">
+                        Shorter video behavior
+                      </label>
+                      <div className="bg-stone-900/5 rounded-lg text-black/70" style={{ padding: 2 }}>
+                        <div className="relative flex items-center">
+                          <div
+                            className={clsx(
+                              "absolute left-0 inset-y-0 w-1/2 flex bg-white transition-all ease-in-out duration-200 transform rounded-md shadow",
+                              loopShorter ? "translate-x-0" : "translate-x-full",
+                            )}
+                          />
+                          <button
+                            className="relative flex-1 text-xs font-semibold capitalize items-center justify-center cursor-pointer m-px p-px py-0.5"
+                            onClick={() => setLoopShorter(true)}
+                          >
+                            Loop
+                          </button>
+                          <button
+                            className="relative flex-1 text-xs font-semibold capitalize items-center justify-center cursor-pointer m-px p-px py-0.5"
+                            onClick={() => setLoopShorter(false)}
+                          >
+                            Freeze
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  <hr className="my-1.5 border-none" />
                   <label className="font-normal mb-0.5 text-black/80 text-xs">Device</label>
                   <div className="flex relative items-center w-full">
                     <select
                       tabIndex={-1}
-                      className="appearance-none bg-white/60 rounded-md px-3 py-1 w-full text-xs font-normal text-black/80"
+                      className="appearance-none bg-white/60 rounded-md px-3 py-1 w-full text-xs font-normal text-black/80 cursor-pointer"
                       value={selectedMockup.name}
                       onChange={(event) => {
                         setSelectedMockup(mockupsDefs.find((mockup) => mockup.name === event.target.value)!);
@@ -263,92 +410,44 @@ export default function Home() {
                     >
                       <optgroup label="iPhone">
                         {mockupsDefs.map((mockup) => (
-                          <option
-                            key={mockup.name}
-                            value={mockup.name}
-                          >
+                          <option key={mockup.name} value={mockup.name}>
                             {mockup.name}
                           </option>
                         ))}
                       </optgroup>
-                      {/* <optgroup label="Android">
-                  <option value="volvo">Volvo</option>
-                  <option value="saab">Saab</option>
-                </optgroup> */}
                     </select>
-
-                    <div className="absolute right-1 text-black/70">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 16 16"
-                        fill="currentColor"
-                        className="w-4 h-4"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
+                    <div className="absolute right-1 text-black/70 pointer-events-none">
+                      <ChevronDown />
                     </div>
                   </div>
+
                   <hr className="my-1.5 border-none" />
-                  <label className="font-normal mb-0.5 text-black/80 text-xs">Aspec Ratio</label>
+                  <label className="font-normal mb-0.5 text-black/80 text-xs">Aspect Ratio</label>
                   <div className="flex relative items-center w-full">
                     <select
                       value={selectedAspectRatio.name}
                       tabIndex={-1}
-                      className="appearance-none bg-white/60 rounded-md px-3 py-1 w-full text-xs font-normal text-black/80"
+                      className="appearance-none bg-white/60 rounded-md px-3 py-1 w-full text-xs font-normal text-black/80 cursor-pointer"
                       onChange={(event) => {
                         setSelectedAspectRatio(aspectRatios.find((ratio) => ratio.name === event.target.value)!);
                       }}
                     >
                       {aspectRatios.map((ratio) => (
-                        <option
-                          key={ratio.name}
-                          value={ratio.name}
-                        >
+                        <option key={ratio.name} value={ratio.name}>
                           {ratio.name}
                         </option>
                       ))}
                     </select>
-
-                    <div className="absolute right-1 text-black/70">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 16 16"
-                        fill="currentColor"
-                        className="w-4 h-4"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
+                    <div className="absolute right-1 text-black/70 pointer-events-none">
+                      <ChevronDown />
                     </div>
                   </div>
+
                   <hr className="my-1.5 border-none" />
                   <label className="font-normal mb-1 text-black/80 text-xs flex justify-between items-center">
                     Size
-                    <button
-                      className="text-black/50"
-                      onClick={() => {
-                        setScale(90);
-                      }}
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 16 16"
-                        fill="currentColor"
-                        className="w-3 h-3"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M12.5 9.75A2.75 2.75 0 0 0 9.75 7H4.56l2.22 2.22a.75.75 0 1 1-1.06 1.06l-3.5-3.5a.75.75 0 0 1 0-1.06l3.5-3.5a.75.75 0 0 1 1.06 1.06L4.56 5.5h5.19a4.25 4.25 0 0 1 0 8.5h-1a.75.75 0 0 1 0-1.5h1a2.75 2.75 0 0 0 2.75-2.75Z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
+                    <button className="text-black/50 cursor-pointer" onClick={() => setScale(90)} aria-label="Reset size">
+                      <ResetIcon />
                     </button>
                   </label>
                   <Slider
@@ -357,31 +456,14 @@ export default function Home() {
                     step={1}
                     min={30}
                     value={[scale]}
-                    onValueChange={(value) => {
-                      setScale(value[0]);
-                    }}
+                    onValueChange={(value) => setScale(value[0])}
                   />
+
                   <hr className="my-1.5 border-none" />
                   <label className="font-normal mb-1 text-black/80 text-xs flex justify-between items-center">
                     Vertical Position
-                    <button
-                      className="text-black/50"
-                      onClick={() => {
-                        setVerticalOffset(0);
-                      }}
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 16 16"
-                        fill="currentColor"
-                        className="w-3 h-3"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M12.5 9.75A2.75 2.75 0 0 0 9.75 7H4.56l2.22 2.22a.75.75 0 1 1-1.06 1.06l-3.5-3.5a.75.75 0 0 1 0-1.06l3.5-3.5a.75.75 0 0 1 1.06 1.06L4.56 5.5h5.19a4.25 4.25 0 0 1 0 8.5h-1a.75.75 0 0 1 0-1.5h1a2.75 2.75 0 0 0 2.75-2.75Z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
+                    <button className="text-black/50 cursor-pointer" onClick={() => setVerticalOffset(0)} aria-label="Reset vertical position">
+                      <ResetIcon />
                     </button>
                   </label>
                   <Slider
@@ -390,35 +472,28 @@ export default function Home() {
                     step={1}
                     min={-100}
                     value={[verticalOffset]}
-                    onValueChange={(value) => {
-                      setVerticalOffset(value[0]);
-                    }}
+                    onValueChange={(value) => setVerticalOffset(value[0])}
                   />
+
                   <hr className="my-1.5 border-none" />
-                  <label className="font-normal mb-1 text-black/80 text-xs flex justify-between items-center">Framerate</label>
-
-                  <div
-                    className="bg-stone-900/5 rounded-lg text-black/70"
-                    style={{ padding: 2 }}
-                  >
+                  <label className="font-normal mb-1 text-black/80 text-xs">Framerate</label>
+                  <div className="bg-stone-900/5 rounded-lg text-black/70" style={{ padding: 2 }}>
                     <div className="relative flex items-center">
-                      {/* <div className="absolute w-full">
-                        <div className="w-1/2 flex justify-between m-auto">
-                          <div className={clsx("h-3 w-px bg-gray-400 rounded-full opacity-0 transition-opacity duration-100 ease-in-out", selectedFramerate === 30 && "opacity-100")}></div>
-                          <div className={clsx("h-3 w-px bg-gray-400 rounded-full opacity-0 transition-opacity duration-100 ease-in-out", selectedFramerate === 60 && "opacity-100")}></div>
-                        </div>
-                      </div> */}
-
-                      <div className={clsx("absolute left-0 inset-y-0 w-1/2 flex bg-white transition-all ease-in-out duration-200 transform rounded-md shadow", selectedFramerate === 30 && "translate-x-0", selectedFramerate === 60 && "translate-x-full")}></div>
-
+                      <div
+                        className={clsx(
+                          "absolute left-0 inset-y-0 w-1/2 flex bg-white transition-all ease-in-out duration-200 transform rounded-md shadow",
+                          selectedFramerate === 30 && "translate-x-0",
+                          selectedFramerate === 60 && "translate-x-full",
+                        )}
+                      />
                       <button
-                        className="relative flex-1 flex text-xs font-semibold capitalize items-center justify-center cursor-pointer m-px p-px"
+                        className="relative flex-1 text-xs font-semibold items-center justify-center cursor-pointer m-px p-px py-0.5"
                         onClick={() => setSelectedFramerate(30)}
                       >
                         30
                       </button>
                       <button
-                        className="relative flex-1 flex text-xs font-semibold capitalize items-center justify-center cursor-pointer m-px p-px"
+                        className="relative flex-1 text-xs font-semibold items-center justify-center cursor-pointer m-px p-px py-0.5"
                         onClick={() => setSelectedFramerate(60)}
                       >
                         60
@@ -427,46 +502,164 @@ export default function Home() {
                   </div>
 
                   <hr className="my-1.5 border-none" />
-                  <label className="font-normal mb-1 text-black/80 text-xs">Background Color</label>
-                  <div className="flex gap-2 overflow-auto pb-2">
-                    {colors.map((color) => (
+                  <label className="font-normal mb-1 text-black/80 text-xs">Background</label>
+                  <div className="bg-stone-900/5 rounded-lg text-black/70 mb-2" style={{ padding: 2 }}>
+                    <div className="relative flex items-center">
                       <div
-                        key={color}
-                        className={cn("w-6 h-6 rounded-full cursor-pointerborder-0 flex items-center justify-center border border-black/10 shadow-sm", color === backgroundColor && "")}
-                        style={{ backgroundColor: color }}
-                        onClick={() => {
-                          setBackgroundColor(color);
-                        }}
-                      >
-                        {backgroundColor === color && <div className="bg-white shadow-sm  rounded-full h-2.5 w-2.5" />}
-                      </div>
-                    ))}
+                        className="absolute inset-y-0 flex bg-white transition-all ease-in-out duration-200 transform rounded-md shadow"
+                        style={{ width: `${100 / 3}%`, left: `${["color", "gradient", "image"].indexOf(bgTab) * (100 / 3)}%` }}
+                      />
+                      {(["color", "gradient", "image"] as BgTab[]).map((t) => (
+                        <button
+                          key={t}
+                          className="relative flex-1 text-xs font-semibold capitalize items-center justify-center cursor-pointer m-px p-px py-0.5"
+                          onClick={() => setBgTab(t)}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
                   </div>
+
+                  {bgTab === "color" && (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex gap-2 overflow-auto pb-1">
+                        {colors.map((color) => (
+                          <button
+                            key={color}
+                            className={cn(
+                              "w-6 h-6 rounded-full cursor-pointer flex items-center justify-center border border-black/10 shadow-sm flex-shrink-0",
+                            )}
+                            style={{ backgroundColor: color }}
+                            onClick={() => setSolidColor(color)}
+                            aria-label={`Color ${color}`}
+                          >
+                            {solidColor === color && <div className="bg-white shadow-sm rounded-full h-2.5 w-2.5" />}
+                          </button>
+                        ))}
+                      </div>
+                      <label className="flex items-center gap-2 text-xs text-black/70">
+                        <span className="flex-1">Custom</span>
+                        <input
+                          type="color"
+                          value={solidColor}
+                          onChange={(e) => setSolidColor(e.target.value)}
+                          className="h-7 w-10 rounded cursor-pointer bg-transparent border border-black/10"
+                        />
+                      </label>
+                    </div>
+                  )}
+
+                  {bgTab === "gradient" && (
+                    <div className="flex flex-col gap-2">
+                      <div
+                        className="h-8 w-full rounded-md border border-black/10"
+                        style={{ background: `linear-gradient(${gradient.angle}deg, ${gradient.from}, ${gradient.to})` }}
+                      />
+                      <div className="flex items-center gap-2 text-xs text-black/70">
+                        <span className="w-12">From</span>
+                        <input
+                          type="color"
+                          value={gradient.from}
+                          onChange={(e) => setGradient((g) => ({ ...g, from: e.target.value }))}
+                          className="h-7 w-10 rounded cursor-pointer bg-transparent border border-black/10"
+                        />
+                        <span className="w-8 text-right">To</span>
+                        <input
+                          type="color"
+                          value={gradient.to}
+                          onChange={(e) => setGradient((g) => ({ ...g, to: e.target.value }))}
+                          className="h-7 w-10 rounded cursor-pointer bg-transparent border border-black/10"
+                        />
+                      </div>
+                      <label className="text-xs text-black/70 flex justify-between items-center">
+                        <span>Angle</span>
+                        <span className="font-mono text-black/50">{gradient.angle}°</span>
+                      </label>
+                      <Slider
+                        max={360}
+                        step={1}
+                        min={0}
+                        value={[gradient.angle]}
+                        onValueChange={(v) => setGradient((g) => ({ ...g, angle: v[0] }))}
+                      />
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {[
+                          { from: "#a5f3fc", to: "#f5d0fe" },
+                          { from: "#fde68a", to: "#fca5a5" },
+                          { from: "#bfdbfe", to: "#c7d2fe" },
+                          { from: "#bbf7d0", to: "#fef08a" },
+                          { from: "#fbcfe8", to: "#ddd6fe" },
+                          { from: "#0f172a", to: "#334155" },
+                        ].map((p) => (
+                          <button
+                            key={p.from + p.to}
+                            className="h-6 w-6 rounded-full border border-black/10 cursor-pointer flex-shrink-0"
+                            style={{ background: `linear-gradient(135deg, ${p.from}, ${p.to})` }}
+                            onClick={() => setGradient((g) => ({ ...g, from: p.from, to: p.to }))}
+                            aria-label="Gradient preset"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {bgTab === "image" && (
+                    <div className="flex flex-col gap-2">
+                      {bgImageUrl ? (
+                        <div className="relative">
+                          <img src={bgImageUrl} alt="Background preview" className="h-20 w-full object-cover rounded-md border border-black/10" />
+                          <button
+                            className="absolute top-1 right-1 bg-white/90 rounded-full px-2 py-0.5 text-[10px] font-medium text-black/70 cursor-pointer shadow"
+                            onClick={() => setBgImageFile(null)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : null}
+                      <label className="cursor-pointer text-center text-xs text-black/70 bg-white/60 hover:bg-white rounded-md py-2 border border-dashed border-black/15">
+                        {bgImageFile ? "Replace image" : "Upload image"}
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/*"
+                          onChange={handleBgImageChange}
+                        />
+                      </label>
+                    </div>
+                  )}
                 </PopoverContent>
               </Popover>
             </div>
           )}
-          {videoFile && !transpilingStarted && !transpilingFinished && <div className="hidden sm:block bottom-3 right-4 absolute text-xs  text-black/50 font-mono">{smartTrim(videoFile?.name, 16) + " | " + Math.fround(videoFile.size / 1000000).toPrecision(3) + "/Mb"}</div>}
+
+          {anyVideoLoaded && !transpilingStarted && !transpilingFinished && (
+            <div className="hidden sm:block bottom-3 right-4 absolute text-xs text-black/50 font-mono z-10">
+              {videoFiles.filter((f): f is File => !!f).map((f, i) => (
+                <div key={i}>{smartTrim(f.name, 16)} | {Math.fround(f.size / 1000000).toPrecision(3)}/Mb</div>
+              ))}
+            </div>
+          )}
+
           {transpilingStarted && !transpilingFinished && (
             <>
-              <div className="absolute transition-all h-full w-full left-0 " />
+              <div className="absolute transition-all h-full w-full left-0" />
               <div
                 className="absolute transition-all h-full left-0 bg-black/5"
-                style={{
-                  width: `${progress}%`,
-                }}
+                style={{ width: `${progress}%` }}
               />
-              <div className="w-full h-full absolute pointer-events-none " />
-              <div className="text-xs bottom-3 left-4 text-black/50 font-mono absolute ">
+              <div className="w-full h-full absolute pointer-events-none" />
+              <div className="text-xs bottom-3 left-4 text-black/50 font-mono absolute">
                 <span>Generating video... {Math.min(Math.round(progress), 100)}%</span>
               </div>
             </>
           )}
+
           {transpilingFinished && finishedVideoUrl && (
-            <div className="bg-white/20 backdrop-blur-md absolute transition-all h-full flex items-center justify-center w-full left-0">
+            <div className="bg-white/20 backdrop-blur-md absolute transition-all h-full flex items-center justify-center w-full left-0 z-20">
               <div className="flex flex-col items-center">
                 <button
-                  className="flex items-center text-black/70 bg-white/90 hover:scale-105 transition-all ease-in-out shadow-md  border-black/10 border backdrop-blur-3xl px-3.5 gap-1 text-sm font-medium py-1 rounded-md "
+                  className="cursor-pointer flex items-center text-black/70 bg-white/90 hover:scale-105 transition-all ease-in-out shadow-md border-black/10 border backdrop-blur-3xl px-3.5 gap-1 text-sm font-medium py-1 rounded-md"
                   onClick={() => {
                     const a = document.createElement("a");
                     a.href = finishedVideoUrl;
@@ -487,16 +680,8 @@ export default function Home() {
                 </button>
                 <hr className="my-1 border-none" />
                 <button
-                  className="flex items-center font-semibold text-black/60 hover:underline underline-offset-2 group/retry drop-shadow-sm  shadow-black gap-1 text-xs hover:scale-105 ease-in-out"
-                  onClick={() => {
-                    setVideoFile(null);
-                    setScale(90);
-                    setBackgroundColor(colors[0]);
-                    setVerticalOffset(0);
-                    setSelectedMockup(mockupsDefs[0]);
-                    setSelectedAspectRatio(aspectRatios[0]);
-                    reset();
-                  }}
+                  className="cursor-pointer flex items-center font-semibold text-black/60 hover:underline underline-offset-2 group/retry drop-shadow-sm shadow-black gap-1 text-xs hover:scale-105 ease-in-out"
+                  onClick={handleReset}
                 >
                   <span>Start Over</span>
                   <svg
@@ -523,7 +708,7 @@ export default function Home() {
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 16 16"
             fill="currentColor"
-            className="w-4 h-4 "
+            className="w-4 h-4"
           >
             <path
               fillRule="evenodd"
@@ -536,5 +721,29 @@ export default function Home() {
         <div className="text-xs text-black/30">© Laurids Kern {new Date().getFullYear()}</div>
       </div>
     </main>
+  );
+}
+
+function ChevronDown() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
+      <path
+        fillRule="evenodd"
+        d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+function ResetIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+      <path
+        fillRule="evenodd"
+        d="M12.5 9.75A2.75 2.75 0 0 0 9.75 7H4.56l2.22 2.22a.75.75 0 1 1-1.06 1.06l-3.5-3.5a.75.75 0 0 1 0-1.06l3.5-3.5a.75.75 0 0 1 1.06 1.06L4.56 5.5h5.19a4.25 4.25 0 0 1 0 8.5h-1a.75.75 0 0 1 0-1.5h1a2.75 2.75 0 0 0 2.75-2.75Z"
+        clipRule="evenodd"
+      />
+    </svg>
   );
 }

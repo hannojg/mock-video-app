@@ -7,6 +7,7 @@ import { Analytics } from "@vercel/analytics/react";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   title: "Create App Video Mockups Locally & Free In-Browser",
   description: "Quickly create video mockups in phone frames, customize sizes and colors, and download instantly—all locally in your browser for free.",
 };
