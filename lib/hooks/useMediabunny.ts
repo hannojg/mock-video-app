@@ -25,10 +25,13 @@ type GenerateVideoParams = {
   canvasWidth: number;
   canvasHeight: number;
   phoneSizePercentage: number;
+  videoSizePercentage: number;
   mockupBackgroundColor: string;
   verticalOffset: number;
   frameRate: number;
   loopShorter: boolean;
+  videoStartTimes: number[];
+  videoEndTimes: number[];
 };
 
 interface UseMediabunnyHook {
@@ -77,11 +80,12 @@ const computeLayout = (
   const maxHeightFromCanvas = canvasHeight * (phoneSizePercentage / 100);
   const mockupHeight = Math.min(maxHeightFromColumn, maxHeightFromCanvas);
   const mockupWidth = mockupHeight * mockupAspect;
-  const mockupInnerHeight = Math.round((mockup.innerHeight / mockup.height) * mockupHeight);
-  const mockupInnerWidth = Math.round((mockup.innerWidth / mockup.height) * mockupHeight);
-  const borderRadius = mockup.cornerRadius * (mockupHeight / mockup.height);
-  const offsetX = (mockupWidth - mockupInnerWidth) / 2;
-  const offsetY = (mockupHeight - mockupInnerHeight) / 2;
+  const mockupScale = mockupHeight / mockup.height;
+  const mockupInnerHeight = Math.round(mockup.innerHeight * mockupScale);
+  const mockupInnerWidth = Math.round(mockup.innerWidth * mockupScale);
+  const borderRadius = mockup.cornerRadius * mockupScale;
+  const offsetX = (mockup.innerX ?? (mockup.width - mockup.innerWidth) / 2) * mockupScale;
+  const offsetY = (mockup.innerY ?? (mockup.height - mockup.innerHeight) / 2) * mockupScale;
   const offsetInPixels = (verticalOffset / 100) * canvasHeight;
 
   const slots = Array.from({ length: count }, (_, i) => {
@@ -147,6 +151,31 @@ const paintBackground = (
   ctx.fillRect(0, 0, width, height);
 };
 
+const getCoveredVideoRect = (
+  sourceWidth: number,
+  sourceHeight: number,
+  targetX: number,
+  targetY: number,
+  targetWidth: number,
+  targetHeight: number,
+  videoSizePercentage: number,
+) => {
+  if (sourceWidth <= 0 || sourceHeight <= 0) {
+    return { x: targetX, y: targetY, width: targetWidth, height: targetHeight };
+  }
+
+  const scale = Math.max(targetWidth / sourceWidth, targetHeight / sourceHeight) * (videoSizePercentage / 100);
+  const width = sourceWidth * scale;
+  const height = sourceHeight * scale;
+
+  return {
+    x: targetX + (targetWidth - width) / 2,
+    y: targetY + (targetHeight - height) / 2,
+    width,
+    height,
+  };
+};
+
 const useMediabunny = (): UseMediabunnyHook => {
   const [isLoaded] = useState(true);
   const [isLoading] = useState(false);
@@ -170,11 +199,14 @@ const useMediabunny = (): UseMediabunnyHook => {
     background,
     mockupBackgroundColor,
     phoneSizePercentage,
+    videoSizePercentage,
     verticalOffset,
     canvasWidth,
     canvasHeight,
     frameRate,
     loopShorter,
+    videoStartTimes,
+    videoEndTimes,
   }: GenerateVideoParams): Promise<void> => {
     setTranspilingStarted(true);
     setTranspilingFinished(false);
@@ -209,23 +241,49 @@ const useMediabunny = (): UseMediabunnyHook => {
         (file) => new Input({ source: new BlobSource(file), formats: ALL_FORMATS })
       );
       const durations = await Promise.all(inputs.map((input) => input.computeDuration()));
-      const maxDuration = Math.max(...durations);
-      const driverIdx = durations.indexOf(maxDuration);
+      const frameDuration = 1 / frameRate;
+      const requestedEndTimes = durations.map((duration, idx) => {
+        const requestedEnd = videoEndTimes[idx] ?? duration;
+        return Math.min(Math.max(requestedEnd || duration, 0), duration);
+      });
+      const startTimes = durations.map((duration, idx) => {
+        const requestedStart = videoStartTimes[idx] ?? 0;
+        const maxStart = Math.max(requestedEndTimes[idx] - frameDuration, 0);
+        return Math.min(Math.max(requestedStart, 0), maxStart);
+      });
+      const endTimes = durations.map((duration, idx) => {
+        const minEnd = Math.min(duration, startTimes[idx] + frameDuration);
+        return Math.min(Math.max(requestedEndTimes[idx], minEnd), duration);
+      });
+      const effectiveDurations = durations.map((_, idx) => Math.max(endTimes[idx] - startTimes[idx], 0));
+      const maxDuration = Math.max(...effectiveDurations);
+      if (!Number.isFinite(maxDuration) || maxDuration <= 0) {
+        throw new Error('Unable to generate video because all selected videos have no remaining duration.');
+      }
+      const driverIdx = effectiveDurations.indexOf(maxDuration);
 
-      const secondarySinks: Array<{
+      const sampleInputs = videoFiles.map(
+        (file) => new Input({ source: new BlobSource(file), formats: ALL_FORMATS })
+      );
+      const sampleSinks: Array<{
         idx: number;
         sink: VideoSampleSink;
         duration: number;
+        startTime: number;
+        endTime: number;
+        effectiveDuration: number;
         lastSample: VideoSample | null;
       }> = [];
       for (let i = 0; i < inputs.length; i++) {
-        if (i === driverIdx) continue;
-        const track = await inputs[i].getPrimaryVideoTrack();
+        const track = await sampleInputs[i].getPrimaryVideoTrack();
         if (!track) continue;
-        secondarySinks.push({
+        sampleSinks.push({
           idx: i,
           sink: new VideoSampleSink(track),
           duration: durations[i],
+          startTime: startTimes[i],
+          endTime: endTimes[i],
+          effectiveDuration: effectiveDurations[i],
           lastSample: null,
         });
       }
@@ -261,7 +319,16 @@ const useMediabunny = (): UseMediabunnyHook => {
         ctx.save();
         createRoundedRectPath(ctx, videoX, videoY, mockupInnerWidth, mockupInnerHeight, borderRadius);
         ctx.clip();
-        sample.draw(ctx, videoX, videoY, mockupInnerWidth, mockupInnerHeight);
+        const videoRect = getCoveredVideoRect(
+          sample.displayWidth,
+          sample.displayHeight,
+          videoX,
+          videoY,
+          mockupInnerWidth,
+          mockupInnerHeight,
+          videoSizePercentage,
+        );
+        sample.draw(ctx, videoRect.x, videoRect.y, videoRect.width, videoRect.height);
         ctx.restore();
       };
 
@@ -281,15 +348,16 @@ const useMediabunny = (): UseMediabunnyHook => {
 
             const t = driverSample.timestamp;
             const samplesByIdx = new Map<number, VideoSample>();
-            samplesByIdx.set(driverIdx, driverSample);
 
-            for (const entry of secondarySinks) {
+            for (const entry of sampleSinks) {
               let sampleTime: number;
-              if (loopShorter && entry.duration > 0) {
-                sampleTime = t % entry.duration;
+              if (entry.idx !== driverIdx && loopShorter && entry.effectiveDuration > 0) {
+                sampleTime = entry.startTime + (t % entry.effectiveDuration);
               } else {
-                sampleTime = Math.min(t, Math.max(entry.duration - 1 / frameRate, 0));
+                const frozenRelativeTime = Math.min(t, Math.max(entry.effectiveDuration - frameDuration, 0));
+                sampleTime = entry.startTime + frozenRelativeTime;
               }
+              sampleTime = Math.min(sampleTime, Math.max(entry.endTime - frameDuration, entry.startTime));
               const sample = await entry.sink.getSample(sampleTime);
               if (sample) {
                 if (entry.lastSample && entry.lastSample !== sample) {
@@ -313,7 +381,7 @@ const useMediabunny = (): UseMediabunnyHook => {
           },
         },
         audio: { discard: true },
-        trim: { start: 0, end: maxDuration },
+        trim: { start: startTimes[driverIdx], end: endTimes[driverIdx] },
       });
 
       conversionRef.current = conversion;
@@ -324,7 +392,7 @@ const useMediabunny = (): UseMediabunnyHook => {
 
       await conversion.execute();
 
-      for (const entry of secondarySinks) {
+      for (const entry of sampleSinks) {
         entry.lastSample?.close();
       }
 

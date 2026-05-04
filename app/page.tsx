@@ -2,7 +2,7 @@
 
 import { Slider } from "@/components/ui/slider";
 import { colors } from "@/lib/constants/colors";
-import { mockupsDefs } from "@/lib/constants/mockups";
+import { mockupsDefs, type Mockup } from "@/lib/constants/mockups";
 import { aspectRatios } from "@/lib/constants/sizes";
 import useMediabunny, { Background } from "@/lib/hooks/useMediabunny";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,9 @@ import { ChangeEvent, DragEvent, useCallback, useEffect, useMemo, useRef, useSta
 
 type DeviceCount = 1 | 2 | 3;
 type BgTab = "color" | "gradient" | "image";
+type VideoDimensions = { width: number; height: number };
+
+const MIN_REMAINING_SECONDS = 1 / 60;
 
 const backgroundCss = (bg: Background, fallback: string) => {
   if (bg.type === "color") return bg.color;
@@ -21,18 +24,73 @@ const backgroundCss = (bg: Background, fallback: string) => {
   return fallback;
 };
 
+const getMockupPreviewInnerX = (mockup: Mockup) => mockup.innerX ?? (mockup.width - mockup.innerWidth) / 2;
+const getMockupPreviewInnerY = (mockup: Mockup) => mockup.innerY ?? (mockup.height - mockup.innerHeight) * 0.4;
+const mockupGroups = Array.from(new Set(mockupsDefs.map((mockup) => mockup.group)));
+
+const getMaxStartOffset = (duration: number) => {
+  if (!Number.isFinite(duration) || duration <= MIN_REMAINING_SECONDS) return 0;
+  return Math.max(duration - MIN_REMAINING_SECONDS, 0);
+};
+
+const clampStartOffset = (value: number, duration: number) => {
+  return Math.min(Math.max(value, 0), getMaxStartOffset(duration));
+};
+
+const clampEndOffset = (value: number, duration: number) => {
+  if (!Number.isFinite(duration) || duration <= 0) return 0;
+  return Math.min(Math.max(value, MIN_REMAINING_SECONDS), duration);
+};
+
+const getEffectiveTrimWindow = (startOffset: number, endOffset: number, duration: number) => {
+  const start = clampStartOffset(startOffset, duration);
+  const end = clampEndOffset(endOffset || duration, duration);
+  if (end > start) return { start, end };
+  return {
+    start: Math.max(Math.min(start, duration - MIN_REMAINING_SECONDS), 0),
+    end: Math.min(Math.max(start + MIN_REMAINING_SECONDS, MIN_REMAINING_SECONDS), duration),
+  };
+};
+
+const formatTimestamp = (seconds: number) => {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "0:00.00";
+  const totalHundredths = Math.round(seconds * 100);
+  const minutes = Math.floor(totalHundredths / 6000);
+  const wholeSeconds = Math.floor((totalHundredths % 6000) / 100);
+  const hundredths = totalHundredths % 100;
+  return `${minutes}:${String(wholeSeconds).padStart(2, "0")}.${String(hundredths).padStart(2, "0")}`;
+};
+
+const formatFrameTimestamp = (seconds: number, frameRate: number) => {
+  const frame = Math.max(Math.round(seconds * frameRate), 0);
+  return `${formatTimestamp(seconds)} f${frame}`;
+};
+
+const snapToFrame = (seconds: number, frameRate: number) => {
+  if (!Number.isFinite(seconds) || frameRate <= 0) return 0;
+  return Math.max(Math.round(seconds * frameRate) / frameRate, 0);
+};
+
 export default function Home() {
   const { generateVideo, progress, reset, transpilingFinished, finishedVideoUrl, transpilingStarted } = useMediabunny();
   const [selectedMockup, setSelectedMockup] = useState(mockupsDefs[0]);
   const [scale, setScale] = useState(90);
+  const [videoScale, setVideoScale] = useState(100);
   const [verticalOffset, setVerticalOffset] = useState(0);
   const [selectedFramerate, setSelectedFramerate] = useState(30);
   const [selectedAspectRatio, setSelectedAspectRatio] = useState(aspectRatios[0]);
   const [deviceCount, setDeviceCount] = useState<DeviceCount>(1);
   const [loopShorter, setLoopShorter] = useState(true);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+  const [previewCompleted, setPreviewCompleted] = useState(false);
+  const [previewScrubTime, setPreviewScrubTime] = useState(0);
 
   const [videoFiles, setVideoFiles] = useState<(File | null)[]>([null]);
   const [videoUrls, setVideoUrls] = useState<string[]>([]);
+  const [videoDurations, setVideoDurations] = useState<number[]>([0]);
+  const [videoDimensions, setVideoDimensions] = useState<(VideoDimensions | null)[]>([null]);
+  const [videoStartOffsets, setVideoStartOffsets] = useState<number[]>([0]);
+  const [videoEndOffsets, setVideoEndOffsets] = useState<number[]>([0]);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
   const [activeDragIdx, setActiveDragIdx] = useState<number | null>(null);
 
@@ -49,6 +107,19 @@ export default function Home() {
   }, [bgTab, gradient, bgImageFile, solidColor]);
 
   const sceneCssBackground = useMemo(() => backgroundCss(background, solidColor), [background, solidColor]);
+  const frameDuration = 1 / selectedFramerate;
+
+  const trimmedDurations = useMemo(() => {
+    return videoFiles.map((file, idx) => {
+      if (!file) return 0;
+      const duration = videoDurations[idx] ?? 0;
+      if (!Number.isFinite(duration) || duration <= 0) return 0;
+      const { start, end } = getEffectiveTrimWindow(videoStartOffsets[idx] ?? 0, videoEndOffsets[idx] || duration, duration);
+      return Math.max(end - start, 0);
+    });
+  }, [videoDurations, videoEndOffsets, videoFiles, videoStartOffsets]);
+
+  const finalPreviewDuration = useMemo(() => Math.max(...trimmedDurations, 0), [trimmedDurations]);
 
   useEffect(() => {
     setVideoFiles((prev) => {
@@ -56,6 +127,27 @@ export default function Home() {
       while (next.length < deviceCount) next.push(null);
       return next;
     });
+    setVideoDurations((prev) => {
+      const next = prev.slice(0, deviceCount);
+      while (next.length < deviceCount) next.push(0);
+      return next;
+    });
+    setVideoDimensions((prev) => {
+      const next = prev.slice(0, deviceCount);
+      while (next.length < deviceCount) next.push(null);
+      return next;
+    });
+    setVideoStartOffsets((prev) => {
+      const next = prev.slice(0, deviceCount);
+      while (next.length < deviceCount) next.push(0);
+      return next;
+    });
+    setVideoEndOffsets((prev) => {
+      const next = prev.slice(0, deviceCount);
+      while (next.length < deviceCount) next.push(0);
+      return next;
+    });
+    videoRefs.current = videoRefs.current.slice(0, deviceCount);
   }, [deviceCount]);
 
   useEffect(() => {
@@ -77,31 +169,268 @@ export default function Home() {
   }, [bgImageFile]);
 
   useEffect(() => {
-    const v = videoRefs.current[0];
-    if (!v) return;
-    const dur = v.duration;
-    if (!isFinite(dur) || dur <= 0) return;
-    const t = (progress / 100) * dur;
-    videoRefs.current.forEach((vv) => {
-      if (vv) vv.currentTime = Math.min(t, vv.duration || t);
+    if (!transpilingStarted) return;
+    const outputDuration = Math.max(
+      ...videoRefs.current.map((video, idx) => {
+        const duration = videoDurations[idx] || video?.duration || 0;
+        const { start, end } = getEffectiveTrimWindow(videoStartOffsets[idx] ?? 0, videoEndOffsets[idx] || duration, duration);
+        return Math.max(end - start, 0);
+      }),
+      0,
+    );
+    if (!Number.isFinite(outputDuration) || outputDuration <= 0) return;
+
+    const t = (progress / 100) * outputDuration;
+    videoRefs.current.forEach((vv, idx) => {
+      if (!vv) return;
+      const duration = videoDurations[idx] || vv.duration || 0;
+      if (!Number.isFinite(duration) || duration <= 0) return;
+
+      const { start, end } = getEffectiveTrimWindow(videoStartOffsets[idx] ?? 0, videoEndOffsets[idx] || duration, duration);
+      const remainingDuration = Math.max(end - start, 0);
+      const relativeTime = loopShorter && remainingDuration > 0
+        ? t % remainingDuration
+        : Math.min(t, Math.max(remainingDuration - 1 / selectedFramerate, 0));
+      vv.currentTime = Math.min(start + relativeTime, Math.max(end - 0.001, 0));
     });
-  }, [progress]);
+  }, [loopShorter, progress, selectedFramerate, transpilingStarted, videoDurations, videoEndOffsets, videoStartOffsets]);
 
   useEffect(() => {
-    videoRefs.current.forEach((v) => {
+    videoRefs.current.forEach((v, idx) => {
       if (!v) return;
       if (transpilingStarted) v.pause();
-      if (transpilingFinished) v.play().catch(() => {});
     });
-  }, [transpilingStarted, transpilingFinished]);
+  }, [transpilingStarted]);
+
+  useEffect(() => {
+    if (transpilingStarted || transpilingFinished) return;
+
+    videoRefs.current.forEach((video, idx) => {
+      if (!video) return;
+      if (!previewPlaying) {
+        video.pause();
+        return;
+      }
+
+      const duration = videoDurations[idx] || video.duration || 0;
+      if (Number.isFinite(duration) && duration > 0 && video.ended) {
+        const { start } = getEffectiveTrimWindow(videoStartOffsets[idx] ?? 0, videoEndOffsets[idx] || duration, duration);
+        video.currentTime = start;
+      }
+      video.play().catch(() => {});
+    });
+  }, [previewPlaying, transpilingFinished, transpilingStarted, videoDurations, videoEndOffsets, videoStartOffsets]);
 
   const setVideoAt = useCallback((idx: number, file: File | null) => {
+    setPreviewPlaying(false);
+    setPreviewCompleted(false);
+    setPreviewScrubTime(0);
     setVideoFiles((prev) => {
       const next = prev.slice();
       next[idx] = file;
       return next;
     });
+    setVideoDurations((prev) => {
+      const next = prev.slice();
+      next[idx] = 0;
+      return next;
+    });
+    setVideoDimensions((prev) => {
+      const next = prev.slice();
+      next[idx] = null;
+      return next;
+    });
+    setVideoStartOffsets((prev) => {
+      const next = prev.slice();
+      next[idx] = 0;
+      return next;
+    });
+    setVideoEndOffsets((prev) => {
+      const next = prev.slice();
+      next[idx] = 0;
+      return next;
+    });
   }, []);
+
+  const setVideoDurationAt = useCallback((idx: number, duration: number) => {
+    const safeDuration = Number.isFinite(duration) ? duration : 0;
+    setVideoDurations((prev) => {
+      const next = prev.slice();
+      next[idx] = safeDuration;
+      return next;
+    });
+    setVideoStartOffsets((prev) => {
+      const next = prev.slice();
+      next[idx] = clampStartOffset(next[idx] ?? 0, safeDuration);
+      return next;
+    });
+    setVideoEndOffsets((prev) => {
+      const next = prev.slice();
+      next[idx] = clampEndOffset(next[idx] || safeDuration, safeDuration);
+      return next;
+    });
+  }, []);
+
+  const setVideoDimensionsAt = useCallback((idx: number, dimensions: VideoDimensions) => {
+    setVideoDimensions((prev) => {
+      const next = prev.slice();
+      next[idx] = dimensions;
+      return next;
+    });
+  }, []);
+
+  const getTrimStartForVideo = useCallback((idx: number) => {
+    const video = videoRefs.current[idx];
+    const duration = videoDurations[idx] || video?.duration || 0;
+    if (!Number.isFinite(duration) || duration <= 0) return 0;
+    return getEffectiveTrimWindow(videoStartOffsets[idx] ?? 0, videoEndOffsets[idx] || duration, duration).start;
+  }, [videoDurations, videoEndOffsets, videoStartOffsets]);
+
+  const getTrimEndForVideo = useCallback((idx: number) => {
+    const video = videoRefs.current[idx];
+    const duration = videoDurations[idx] || video?.duration || 0;
+    if (!Number.isFinite(duration) || duration <= 0) return 0;
+    const endOffset = clampEndOffset(videoEndOffsets[idx] || duration, duration);
+    return Math.max(endOffset - 0.001, 0);
+  }, [videoDurations, videoEndOffsets, videoStartOffsets]);
+
+  const getVideoTimeAtPreviewTime = useCallback((idx: number, previewTime: number) => {
+    const video = videoRefs.current[idx];
+    const duration = videoDurations[idx] || video?.duration || 0;
+    if (!Number.isFinite(duration) || duration <= 0) return 0;
+
+    const { start, end } = getEffectiveTrimWindow(videoStartOffsets[idx] ?? 0, videoEndOffsets[idx] || duration, duration);
+    const trimDuration = Math.max(end - start, 0);
+    if (trimDuration <= 0) return start;
+
+    if (loopShorter) {
+      const relativeTime = previewTime >= finalPreviewDuration ? trimDuration : previewTime % trimDuration;
+      return Math.min(start + relativeTime, Math.max(end - 0.001, start));
+    }
+
+    const relativeTime = Math.min(previewTime, Math.max(trimDuration - 0.001, 0));
+    return Math.min(start + relativeTime, Math.max(end - 0.001, start));
+  }, [finalPreviewDuration, loopShorter, videoDurations, videoEndOffsets, videoStartOffsets]);
+
+  const seekAllVideosToPreviewTime = useCallback((previewTime: number) => {
+    videoRefs.current.forEach((video, idx) => {
+      if (!video) return;
+      video.pause();
+      video.currentTime = getVideoTimeAtPreviewTime(idx, previewTime);
+    });
+  }, [getVideoTimeAtPreviewTime]);
+
+  useEffect(() => {
+    if (previewScrubTime <= finalPreviewDuration) return;
+    const nextTime = Math.max(finalPreviewDuration, 0);
+    setPreviewScrubTime(nextTime);
+    seekAllVideosToPreviewTime(nextTime);
+  }, [finalPreviewDuration, previewScrubTime, seekAllVideosToPreviewTime]);
+
+  const pausePreviewAt = useCallback((idx: number, time: number, alignOthersTo: "start" | "end" = "start") => {
+    setPreviewPlaying(false);
+    setPreviewCompleted(false);
+    videoRefs.current.forEach((video, videoIdx) => {
+      if (!video) return;
+      const duration = videoDurations[videoIdx] || video.duration || 0;
+      if (!Number.isFinite(duration) || duration <= 0) {
+        video.pause();
+        return;
+      }
+      video.currentTime = videoIdx === idx
+        ? time
+        : alignOthersTo === "end"
+          ? getTrimEndForVideo(videoIdx)
+          : getTrimStartForVideo(videoIdx);
+      video.pause();
+    });
+  }, [getTrimEndForVideo, getTrimStartForVideo, videoDurations]);
+
+  const seekAllVideosToTrimStart = useCallback(() => {
+    videoRefs.current.forEach((video, idx) => {
+      if (!video) return;
+      const duration = videoDurations[idx] || video.duration || 0;
+      if (!Number.isFinite(duration) || duration <= 0) return;
+      video.currentTime = getEffectiveTrimWindow(videoStartOffsets[idx] ?? 0, videoEndOffsets[idx] || duration, duration).start;
+    });
+  }, [videoDurations, videoEndOffsets, videoStartOffsets]);
+
+  const pauseCompletedPreview = useCallback(() => {
+    setPreviewPlaying(false);
+    setPreviewCompleted(true);
+    videoRefs.current.forEach((video) => video?.pause());
+  }, []);
+
+  const handleStartOffsetChange = useCallback((idx: number, value: number) => {
+    const duration = videoDurations[idx] ?? 0;
+    const nextOffset = clampStartOffset(snapToFrame(value, selectedFramerate), duration);
+    setVideoStartOffsets((prev) => {
+      const next = prev.slice();
+      next[idx] = nextOffset;
+      return next;
+    });
+
+    pausePreviewAt(idx, nextOffset, "start");
+  }, [pausePreviewAt, selectedFramerate, videoDurations]);
+
+  const handleEndOffsetChange = useCallback((idx: number, value: number) => {
+    const duration = videoDurations[idx] ?? 0;
+    const nextOffset = clampEndOffset(snapToFrame(value, selectedFramerate), duration);
+    setVideoEndOffsets((prev) => {
+      const next = prev.slice();
+      next[idx] = nextOffset;
+      return next;
+    });
+
+    pausePreviewAt(idx, Math.max(nextOffset - 0.001, 0), "end");
+  }, [pausePreviewAt, selectedFramerate, videoDurations, videoStartOffsets]);
+
+  const handleResetTrimAt = useCallback((idx: number) => {
+    setPreviewCompleted(false);
+    const duration = videoDurations[idx] ?? 0;
+    setVideoStartOffsets((prev) => {
+      const next = prev.slice();
+      next[idx] = 0;
+      return next;
+    });
+    setVideoEndOffsets((prev) => {
+      const next = prev.slice();
+      next[idx] = duration;
+      return next;
+    });
+
+    const video = videoRefs.current[idx];
+    if (video && Number.isFinite(video.duration) && video.duration > 0) {
+      video.currentTime = 0;
+      if (previewPlaying) {
+        video.play().catch(() => {});
+      } else {
+        video.pause();
+      }
+    }
+  }, [previewPlaying, videoDurations]);
+
+  const handleTogglePreviewPlayback = useCallback(() => {
+    if (previewPlaying) {
+      setPreviewPlaying(false);
+      return;
+    }
+
+    if (previewCompleted) {
+      seekAllVideosToTrimStart();
+      setPreviewScrubTime(0);
+      setPreviewCompleted(false);
+    }
+    setPreviewPlaying(true);
+  }, [previewCompleted, previewPlaying, seekAllVideosToTrimStart]);
+
+  const handlePreviewScrubChange = useCallback((value: number) => {
+    const nextTime = Math.min(Math.max(snapToFrame(value, selectedFramerate), 0), finalPreviewDuration);
+    setPreviewPlaying(false);
+    setPreviewCompleted(false);
+    setPreviewScrubTime(nextTime);
+    seekAllVideosToPreviewTime(nextTime);
+  }, [finalPreviewDuration, seekAllVideosToPreviewTime, selectedFramerate]);
 
   const handleFileChangeAt = useCallback((idx: number) => (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -130,6 +459,7 @@ export default function Home() {
   const handleGenerate = () => {
     const filledFiles = videoFiles.filter((f): f is File => f !== null);
     if (filledFiles.length !== deviceCount) return;
+    setPreviewPlaying(false);
     generateVideo({
       videoFiles: filledFiles,
       mockup: selectedMockup,
@@ -137,23 +467,41 @@ export default function Home() {
       canvasWidth: selectedAspectRatio.width,
       canvasHeight: selectedAspectRatio.height,
       phoneSizePercentage: scale,
+      videoSizePercentage: videoScale,
       mockupBackgroundColor: "black",
       verticalOffset,
       frameRate: selectedFramerate,
       loopShorter,
+      videoStartTimes: videoStartOffsets.slice(0, deviceCount),
+      videoEndTimes: videoEndOffsets.slice(0, deviceCount),
     });
   };
 
   const handleReset = () => {
+    setPreviewPlaying(false);
+    setPreviewCompleted(false);
+    setPreviewScrubTime(0);
     setVideoFiles(Array(deviceCount).fill(null));
     setScale(90);
+    setVideoScale(100);
     setBgTab("color");
     setSolidColor(colors[0]);
     setGradient({ from: "#a5f3fc", to: "#f5d0fe", angle: 135 });
     setBgImageFile(null);
+    setVideoDurations(Array(deviceCount).fill(0));
+    setVideoDimensions(Array(deviceCount).fill(null));
+    setVideoStartOffsets(Array(deviceCount).fill(0));
+    setVideoEndOffsets(Array(deviceCount).fill(0));
     setVerticalOffset(0);
     setSelectedMockup(mockupsDefs[0]);
     setSelectedAspectRatio(aspectRatios[0]);
+    reset();
+  };
+
+  const handleContinueEditing = () => {
+    setPreviewPlaying(false);
+    setPreviewCompleted(false);
+    seekAllVideosToTrimStart();
     reset();
   };
 
@@ -191,6 +539,14 @@ export default function Home() {
               const isDragOver = activeDragIdx === idx;
               const cellAspect = (selectedAspectRatio.width / selectedAspectRatio.height) / deviceCount;
               const mockupAspect = selectedMockup.width / selectedMockup.height;
+              const screenAspect = selectedMockup.innerWidth / selectedMockup.innerHeight;
+              const dimensions = videoDimensions[idx];
+              const videoAspect = dimensions && dimensions.width > 0 && dimensions.height > 0
+                ? dimensions.width / dimensions.height
+                : screenAspect;
+              const videoSizing = videoAspect > screenAspect
+                ? { height: `${videoScale}%`, width: "auto" }
+                : { width: `${videoScale}%`, height: "auto" };
               const maxScaleByColumn = (cellAspect * 0.97 / mockupAspect) * 100;
               const sizingScale = Math.min(scale, maxScaleByColumn);
               return (
@@ -242,12 +598,12 @@ export default function Home() {
                       </div>
                       <div
                         className={cn(
-                          "absolute rounded-[5%] overflow-hidden transition-all duration-200",
+                          "absolute rounded-[5%] overflow-hidden bg-black transition-all duration-200",
                           !file && "group-hover/phone:opacity-30 group-hover/phone:blur-sm",
                         )}
                         style={{
-                          left: `${((selectedMockup.width - selectedMockup.innerWidth) / selectedMockup.width) * 50}%`,
-                          top: `${((selectedMockup.height - selectedMockup.innerHeight) / selectedMockup.height) * 40}%`,
+                          left: `${(getMockupPreviewInnerX(selectedMockup) / selectedMockup.width) * 100}%`,
+                          top: `${(getMockupPreviewInnerY(selectedMockup) / selectedMockup.height) * 100}%`,
                           width: `${(selectedMockup.innerWidth / selectedMockup.width) * 100 * 1.005}%`,
                           height: `${(selectedMockup.innerHeight / selectedMockup.height) * 100 * 1.01}%`,
                         }}
@@ -256,13 +612,56 @@ export default function Home() {
                           <video
                             controls={false}
                             muted
-                            autoPlay
-                            className="w-full h-full"
+                            className="absolute left-1/2 top-1/2 max-w-none transition-transform duration-200"
+                            style={{
+                              ...videoSizing,
+                              transform: "translate(-50%, -50%)",
+                            }}
                             key={url}
-                            loop
                             playsInline
                             unselectable="on"
                             ref={(el) => { videoRefs.current[idx] = el; }}
+                            onLoadedMetadata={(event) => {
+                              const duration = event.currentTarget.duration;
+                              setVideoDurationAt(idx, duration);
+                              setVideoDimensionsAt(idx, {
+                                width: event.currentTarget.videoWidth,
+                                height: event.currentTarget.videoHeight,
+                              });
+                              const { start } = getEffectiveTrimWindow(videoStartOffsets[idx] ?? 0, videoEndOffsets[idx] || duration, duration);
+                              event.currentTarget.currentTime = start;
+                              if (previewPlaying) {
+                                event.currentTarget.play().catch(() => {});
+                              } else {
+                                event.currentTarget.pause();
+                              }
+                            }}
+                            onTimeUpdate={(event) => {
+                              if (!previewPlaying || transpilingStarted) return;
+                              const duration = event.currentTarget.duration;
+                              const { start, end } = getEffectiveTrimWindow(videoStartOffsets[idx] ?? 0, videoEndOffsets[idx] || duration, duration);
+                              if (event.currentTarget.currentTime >= end) {
+                                if (loopShorter) {
+                                  event.currentTarget.currentTime = start;
+                                  event.currentTarget.play().catch(() => {});
+                                } else {
+                                  event.currentTarget.currentTime = Math.max(end - 0.001, start);
+                                  pauseCompletedPreview();
+                                }
+                              }
+                            }}
+                            onEnded={(event) => {
+                              if (transpilingStarted || !previewPlaying) return;
+                              const duration = event.currentTarget.duration;
+                              const { start, end } = getEffectiveTrimWindow(videoStartOffsets[idx] ?? 0, videoEndOffsets[idx] || duration, duration);
+                              if (loopShorter) {
+                                event.currentTarget.currentTime = start;
+                                event.currentTarget.play().catch(() => {});
+                              } else {
+                                event.currentTarget.currentTime = Math.max(end - 0.001, start);
+                                pauseCompletedPreview();
+                              }
+                            }}
                           >
                             <source src={url} />
                           </video>
@@ -408,13 +807,17 @@ export default function Home() {
                         setSelectedMockup(mockupsDefs.find((mockup) => mockup.name === event.target.value)!);
                       }}
                     >
-                      <optgroup label="iPhone">
-                        {mockupsDefs.map((mockup) => (
-                          <option key={mockup.name} value={mockup.name}>
-                            {mockup.name}
-                          </option>
-                        ))}
-                      </optgroup>
+                      {mockupGroups.map((group) => (
+                        <optgroup key={group} label={group}>
+                          {mockupsDefs
+                            .filter((mockup) => mockup.group === group)
+                            .map((mockup) => (
+                              <option key={mockup.name} value={mockup.name}>
+                                {mockup.name}
+                              </option>
+                            ))}
+                        </optgroup>
+                      ))}
                     </select>
                     <div className="absolute right-1 text-black/70 pointer-events-none">
                       <ChevronDown />
@@ -445,7 +848,7 @@ export default function Home() {
 
                   <hr className="my-1.5 border-none" />
                   <label className="font-normal mb-1 text-black/80 text-xs flex justify-between items-center">
-                    Size
+                    Frame Size
                     <button className="text-black/50 cursor-pointer" onClick={() => setScale(90)} aria-label="Reset size">
                       <ResetIcon />
                     </button>
@@ -457,6 +860,22 @@ export default function Home() {
                     min={30}
                     value={[scale]}
                     onValueChange={(value) => setScale(value[0])}
+                  />
+
+                  <hr className="my-1.5 border-none" />
+                  <label className="font-normal mb-1 text-black/80 text-xs flex justify-between items-center">
+                    Video Size
+                    <button className="text-black/50 cursor-pointer" onClick={() => setVideoScale(100)} aria-label="Reset video size">
+                      <ResetIcon />
+                    </button>
+                  </label>
+                  <Slider
+                    defaultValue={[100]}
+                    max={200}
+                    step={1}
+                    min={50}
+                    value={[videoScale]}
+                    onValueChange={(value) => setVideoScale(value[0])}
                   />
 
                   <hr className="my-1.5 border-none" />
@@ -680,6 +1099,22 @@ export default function Home() {
                 </button>
                 <hr className="my-1 border-none" />
                 <button
+                  className="cursor-pointer flex items-center font-semibold text-black/60 hover:underline underline-offset-2 group/edit drop-shadow-sm shadow-black gap-1 text-xs hover:scale-105 ease-in-out"
+                  onClick={handleContinueEditing}
+                >
+                  <span>Continue Editing</span>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    className="w-3.5 h-3.5 group-hover/edit:-translate-y-0.5 ease-in-out transition-all duration-300"
+                  >
+                    <path d="M11.94 1.94a1.5 1.5 0 0 1 2.12 2.12l-.88.88-2.12-2.12.88-.88Z" />
+                    <path d="M10 3.88 2.75 11.13A2.75 2.75 0 0 0 2 12.56V14h1.44a2.75 2.75 0 0 0 1.43-.75L12.12 6 10 3.88Z" />
+                  </svg>
+                </button>
+                <hr className="my-1 border-none" />
+                <button
                   className="cursor-pointer flex items-center font-semibold text-black/60 hover:underline underline-offset-2 group/retry drop-shadow-sm shadow-black gap-1 text-xs hover:scale-105 ease-in-out"
                   onClick={handleReset}
                 >
@@ -702,6 +1137,146 @@ export default function Home() {
           )}
         </div>
       </div>
+
+      {anyVideoLoaded && !transpilingStarted && !transpilingFinished && (
+        <div className="w-full max-w-2xl px-[5%] pt-3">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between rounded-md bg-white/60 px-2.5 py-2 text-xs text-black/60 shadow-sm ring-1 ring-black/5 backdrop-blur-xl">
+              <span className="font-medium text-black/70">Preview</span>
+              <button
+                className="flex h-7 min-w-20 cursor-pointer items-center justify-center gap-1.5 rounded-md bg-white/80 px-2.5 font-semibold text-black/70 shadow-sm transition-colors hover:bg-white"
+                onClick={handleTogglePreviewPlayback}
+                aria-label={previewPlaying ? "Pause preview" : "Play preview"}
+                title={previewPlaying ? "Pause preview" : "Play preview"}
+              >
+                {previewPlaying ? <PauseIcon /> : <PlayIcon />}
+                <span>{previewPlaying ? "Pause" : "Play"}</span>
+              </button>
+            </div>
+            {deviceCount > 1 && finalPreviewDuration > 0 && (
+              <div className="flex items-center gap-2 rounded-md bg-white/60 px-2.5 py-2 text-xs text-black/60 shadow-sm ring-1 ring-black/5 backdrop-blur-xl">
+                <span className="w-12 shrink-0 text-left font-medium text-black/70">Final</span>
+                <Slider
+                  max={Math.max(finalPreviewDuration, frameDuration)}
+                  step={frameDuration}
+                  min={0}
+                  value={[Math.min(previewScrubTime, finalPreviewDuration)]}
+                  onValueChange={(value) => handlePreviewScrubChange(value[0])}
+                  className="min-w-0 flex-1"
+                />
+                <span className="w-32 shrink-0 text-right font-mono text-[11px] text-black/50">
+                  {formatFrameTimestamp(Math.min(previewScrubTime, finalPreviewDuration), selectedFramerate)}
+                </span>
+                <span className="w-12 shrink-0 text-right font-mono text-[11px] text-black/50">
+                  {selectedFramerate}fps
+                </span>
+              </div>
+            )}
+            {videoFiles.map((file, idx) => {
+              if (!file) return null;
+
+              const duration = videoDurations[idx] ?? 0;
+              const startOffset = clampStartOffset(videoStartOffsets[idx] ?? 0, duration);
+              const endOffset = clampEndOffset(videoEndOffsets[idx] || duration, duration);
+              const maxStartOffset = Math.max(duration - frameDuration, 0);
+              const canTrim = duration > frameDuration;
+              const startFrame = Math.max(Math.round(startOffset * selectedFramerate), 0);
+              const endFrame = Math.max(Math.round(endOffset * selectedFramerate), 0);
+              const maxStartFrame = Math.max(Math.floor(maxStartOffset * selectedFramerate), 0);
+              const maxEndFrame = Math.max(Math.round(duration * selectedFramerate), 1);
+
+              return (
+                <div
+                  key={`${idx}-${file.name}-${file.lastModified}`}
+                  className="flex flex-col gap-2 rounded-md bg-white/60 px-2.5 py-2 text-xs text-black/60 shadow-sm ring-1 ring-black/5 backdrop-blur-xl"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 flex-1 text-left font-medium text-black/70">
+                      {deviceCount > 1 ? `Video ${idx + 1}` : smartTrim(file.name, 24)}
+                    </span>
+                    <span className="shrink-0 font-mono text-[11px] text-black/50">
+                      {formatFrameTimestamp(Math.max(endOffset - startOffset, 0), selectedFramerate)}
+                    </span>
+                    <button
+                      className="shrink-0 text-black/50 cursor-pointer disabled:cursor-default disabled:opacity-30"
+                      onClick={() => handleResetTrimAt(idx)}
+                      disabled={startOffset === 0 && endOffset === duration}
+                      aria-label={`Reset video ${idx + 1} trim`}
+                    >
+                      <ResetIcon />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-12 shrink-0 text-left font-medium text-black/60">Start</span>
+                    <Slider
+                      max={Math.max(maxStartOffset, MIN_REMAINING_SECONDS)}
+                      step={frameDuration}
+                      min={0}
+                      value={[startOffset]}
+                      disabled={!canTrim || maxStartOffset <= 0}
+                      onValueChange={(value) => handleStartOffsetChange(idx, value[0])}
+                      className="min-w-0 flex-1"
+                    />
+                    <div className="flex w-36 shrink-0 items-center justify-end gap-1.5">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        max={maxStartFrame}
+                        step={1}
+                        value={startFrame}
+                        disabled={!canTrim || maxStartOffset <= 0}
+                        onChange={(event) => {
+                          const value = event.currentTarget.valueAsNumber;
+                          if (Number.isFinite(value)) handleStartOffsetChange(idx, value / selectedFramerate);
+                        }}
+                        className="h-7 w-20 rounded-md border border-black/10 bg-white/70 px-1.5 text-right font-mono text-[11px] text-black/70 shadow-sm disabled:opacity-40"
+                        aria-label={`Video ${idx + 1} start frame`}
+                      />
+                      <span className="w-10 text-right font-mono text-[11px] text-black/50">
+                        {formatTimestamp(startOffset)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-12 shrink-0 text-left font-medium text-black/60">End</span>
+                    <Slider
+                      max={Math.max(duration, MIN_REMAINING_SECONDS)}
+                      step={frameDuration}
+                      min={frameDuration}
+                      value={[endOffset]}
+                      disabled={!canTrim}
+                      onValueChange={(value) => handleEndOffsetChange(idx, value[0])}
+                      className="min-w-0 flex-1"
+                    />
+                    <div className="flex w-36 shrink-0 items-center justify-end gap-1.5">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={maxEndFrame}
+                        step={1}
+                        value={endFrame}
+                        disabled={!canTrim}
+                        onChange={(event) => {
+                          const value = event.currentTarget.valueAsNumber;
+                          if (Number.isFinite(value)) handleEndOffsetChange(idx, value / selectedFramerate);
+                        }}
+                        className="h-7 w-20 rounded-md border border-black/10 bg-white/70 px-1.5 text-right font-mono text-[11px] text-black/70 shadow-sm disabled:opacity-40"
+                        aria-label={`Video ${idx + 1} end frame`}
+                      />
+                      <span className="w-10 text-right font-mono text-[11px] text-black/50">
+                        {formatTimestamp(endOffset)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 flex flex-col justify-between items-center py-3">
         <div className="text-xs flex items-start text-black/50 gap-x-0.5 mx-8">
           <svg
@@ -744,6 +1319,22 @@ function ResetIcon() {
         d="M12.5 9.75A2.75 2.75 0 0 0 9.75 7H4.56l2.22 2.22a.75.75 0 1 1-1.06 1.06l-3.5-3.5a.75.75 0 0 1 0-1.06l3.5-3.5a.75.75 0 0 1 1.06 1.06L4.56 5.5h5.19a4.25 4.25 0 0 1 0 8.5h-1a.75.75 0 0 1 0-1.5h1a2.75 2.75 0 0 0 2.75-2.75Z"
         clipRule="evenodd"
       />
+    </svg>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+      <path d="M4.25 3.14v9.72c0 .64.7 1.03 1.24.68l7.08-4.86a.82.82 0 0 0 0-1.36L5.49 2.46a.82.82 0 0 0-1.24.68Z" />
+    </svg>
+  );
+}
+
+function PauseIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+      <path d="M4.75 2.5A1.25 1.25 0 0 0 3.5 3.75v8.5a1.25 1.25 0 1 0 2.5 0v-8.5A1.25 1.25 0 0 0 4.75 2.5Zm6.5 0A1.25 1.25 0 0 0 10 3.75v8.5a1.25 1.25 0 1 0 2.5 0v-8.5a1.25 1.25 0 0 0-1.25-1.25Z" />
     </svg>
   );
 }
