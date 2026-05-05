@@ -3,6 +3,7 @@ import {
   Input,
   Output,
   Mp4OutputFormat,
+  WebMOutputFormat,
   BufferTarget,
   BlobSource,
   Conversion,
@@ -18,6 +19,8 @@ export type Background =
   | { type: 'gradient'; from: string; to: string; angle: number }
   | { type: 'image'; file: File };
 
+export type ExportFormat = 'mp4' | 'webm-transparent';
+
 type GenerateVideoParams = {
   videoFiles: File[];
   mockup: Mockup;
@@ -29,6 +32,7 @@ type GenerateVideoParams = {
   mockupBackgroundColor: string;
   verticalOffset: number;
   frameRate: number;
+  exportFormat: ExportFormat;
   loopShorter: boolean;
   videoStartTimes: number[];
   videoEndTimes: number[];
@@ -204,6 +208,7 @@ const useMediabunny = (): UseMediabunnyHook => {
     canvasWidth,
     canvasHeight,
     frameRate,
+    exportFormat,
     loopShorter,
     videoStartTimes,
     videoEndTimes,
@@ -227,6 +232,7 @@ const useMediabunny = (): UseMediabunnyHook => {
       } = layout;
       const coloredSquareWidth = Math.round(mockupInnerWidth * 1.01);
       const coloredSquareHeight = Math.round(mockupInnerHeight * 1.01);
+      const transparentBackground = exportFormat === 'webm-transparent';
 
       const mockupImageResponse = await fetch(mockup.imageRelative);
       const mockupImageBlob = await mockupImageResponse.blob();
@@ -289,13 +295,13 @@ const useMediabunny = (): UseMediabunnyHook => {
       }
 
       const output = new Output({
-        format: new Mp4OutputFormat(),
+        format: transparentBackground ? new WebMOutputFormat() : new Mp4OutputFormat(),
         target: new BufferTarget(),
       });
 
       const canvas = new OffscreenCanvas(canvasWidth, canvasHeight);
       const ctx = canvas.getContext('2d', {
-        alpha: false,
+        alpha: transparentBackground,
         willReadFrequently: false,
       })!;
 
@@ -340,11 +346,14 @@ const useMediabunny = (): UseMediabunnyHook => {
           height: canvasHeight,
           fit: 'fill',
           frameRate,
-          codec: 'avc',
+          codec: transparentBackground ? 'vp9' : 'avc',
           bitrate: QUALITY_HIGH,
+          alpha: transparentBackground ? 'keep' : 'discard',
           process: async (driverSample) => {
             ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-            paintBackground(ctx, canvasWidth, canvasHeight, background, backgroundImage);
+            if (!transparentBackground) {
+              paintBackground(ctx, canvasWidth, canvasHeight, background, backgroundImage);
+            }
 
             const t = driverSample.timestamp;
             const samplesByIdx = new Map<number, VideoSample>();
@@ -398,7 +407,9 @@ const useMediabunny = (): UseMediabunnyHook => {
 
       const outputBuffer = output.target.buffer;
       if (outputBuffer) {
-        const videoBlob = new Blob([outputBuffer], { type: 'video/mp4' });
+        const videoBlob = new Blob([outputBuffer], {
+          type: transparentBackground ? 'video/webm' : 'video/mp4',
+        });
         const videoUrl = URL.createObjectURL(videoBlob);
         setFinishedVideoUrl(videoUrl);
       }

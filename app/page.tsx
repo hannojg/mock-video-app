@@ -4,7 +4,7 @@ import { Slider } from "@/components/ui/slider";
 import { colors } from "@/lib/constants/colors";
 import { mockupsDefs, type Mockup } from "@/lib/constants/mockups";
 import { aspectRatios } from "@/lib/constants/sizes";
-import useMediabunny, { Background } from "@/lib/hooks/useMediabunny";
+import useMediabunny, { type Background, type ExportFormat } from "@/lib/hooks/useMediabunny";
 import { cn } from "@/lib/utils";
 import { smartTrim } from "@/lib/utils/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@radix-ui/react-popover";
@@ -17,6 +17,12 @@ type BgTab = "color" | "gradient" | "image";
 type VideoDimensions = { width: number; height: number };
 
 const MIN_REMAINING_SECONDS = 1 / 60;
+const checkerboardBackground = [
+  "linear-gradient(45deg, rgba(0,0,0,0.08) 25%, transparent 25%)",
+  "linear-gradient(-45deg, rgba(0,0,0,0.08) 25%, transparent 25%)",
+  "linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.08) 75%)",
+  "linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.08) 75%)",
+].join(", ");
 
 const backgroundCss = (bg: Background, fallback: string) => {
   if (bg.type === "color") return bg.color;
@@ -78,6 +84,7 @@ export default function Home() {
   const [videoScale, setVideoScale] = useState(100);
   const [verticalOffset, setVerticalOffset] = useState(0);
   const [selectedFramerate, setSelectedFramerate] = useState(30);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("mp4");
   const [selectedAspectRatio, setSelectedAspectRatio] = useState(aspectRatios[0]);
   const [deviceCount, setDeviceCount] = useState<DeviceCount>(1);
   const [loopShorter, setLoopShorter] = useState(true);
@@ -106,7 +113,11 @@ export default function Home() {
     return { type: "color", color: solidColor };
   }, [bgTab, gradient, bgImageFile, solidColor]);
 
-  const sceneCssBackground = useMemo(() => backgroundCss(background, solidColor), [background, solidColor]);
+  const isTransparentExport = exportFormat === "webm-transparent";
+  const sceneCssBackground = useMemo(
+    () => isTransparentExport ? checkerboardBackground : backgroundCss(background, solidColor),
+    [background, isTransparentExport, solidColor],
+  );
   const frameDuration = 1 / selectedFramerate;
 
   const trimmedDurations = useMemo(() => {
@@ -471,6 +482,7 @@ export default function Home() {
       mockupBackgroundColor: "black",
       verticalOffset,
       frameRate: selectedFramerate,
+      exportFormat,
       loopShorter,
       videoStartTimes: videoStartOffsets.slice(0, deviceCount),
       videoEndTimes: videoEndOffsets.slice(0, deviceCount),
@@ -495,6 +507,7 @@ export default function Home() {
     setVerticalOffset(0);
     setSelectedMockup(mockupsDefs[0]);
     setSelectedAspectRatio(aspectRatios[0]);
+    setExportFormat("mp4");
     reset();
   };
 
@@ -521,10 +534,13 @@ export default function Home() {
             width: `calc(60vh * ${selectedAspectRatio.width}/${selectedAspectRatio.height})`,
             maxHeight: "60vh",
             background: sceneCssBackground,
+            backgroundColor: isTransparentExport ? "#ffffff" : undefined,
+            backgroundPosition: isTransparentExport ? "0 0, 0 12px, 12px -12px, -12px 0" : undefined,
+            backgroundSize: isTransparentExport ? "24px 24px" : undefined,
             aspectRatio: `${selectedAspectRatio.width}/${selectedAspectRatio.height}`,
           }}
         >
-          {bgTab === "image" && bgImageUrl && (
+          {!isTransparentExport && bgTab === "image" && bgImageUrl && (
             <img
               src={bgImageUrl}
               alt="background"
@@ -921,26 +937,56 @@ export default function Home() {
                   </div>
 
                   <hr className="my-1.5 border-none" />
-                  <label className="font-normal mb-1 text-black/80 text-xs">Background</label>
-                  <div className="bg-stone-900/5 rounded-lg text-black/70 mb-2" style={{ padding: 2 }}>
+                  <label className="font-normal mb-1 text-black/80 text-xs">Output</label>
+                  <div className="bg-stone-900/5 rounded-lg text-black/70" style={{ padding: 2 }}>
                     <div className="relative flex items-center">
                       <div
-                        className="absolute inset-y-0 flex bg-white transition-all ease-in-out duration-200 transform rounded-md shadow"
-                        style={{ width: `${100 / 3}%`, left: `${["color", "gradient", "image"].indexOf(bgTab) * (100 / 3)}%` }}
+                        className={clsx(
+                          "absolute left-0 inset-y-0 w-1/2 flex bg-white transition-all ease-in-out duration-200 transform rounded-md shadow",
+                          exportFormat === "mp4" && "translate-x-0",
+                          exportFormat === "webm-transparent" && "translate-x-full",
+                        )}
                       />
-                      {(["color", "gradient", "image"] as BgTab[]).map((t) => (
-                        <button
-                          key={t}
-                          className="relative flex-1 text-xs font-semibold capitalize items-center justify-center cursor-pointer m-px p-px py-0.5"
-                          onClick={() => setBgTab(t)}
-                        >
-                          {t}
-                        </button>
-                      ))}
+                      <button
+                        className="relative flex-1 text-xs font-semibold items-center justify-center cursor-pointer m-px p-px py-0.5"
+                        onClick={() => setExportFormat("mp4")}
+                      >
+                        MP4
+                      </button>
+                      <button
+                        className="relative flex-1 text-xs font-semibold items-center justify-center cursor-pointer m-px p-px py-0.5"
+                        onClick={() => setExportFormat("webm-transparent")}
+                      >
+                        Transparent WebM
+                      </button>
                     </div>
                   </div>
 
-                  {bgTab === "color" && (
+                  {!isTransparentExport && (
+                    <>
+                      <hr className="my-1.5 border-none" />
+                      <label className="font-normal mb-1 text-black/80 text-xs">Background</label>
+                      <div className="bg-stone-900/5 rounded-lg text-black/70 mb-2" style={{ padding: 2 }}>
+                        <div className="relative flex items-center">
+                          <div
+                            className="absolute inset-y-0 flex bg-white transition-all ease-in-out duration-200 transform rounded-md shadow"
+                            style={{ width: `${100 / 3}%`, left: `${["color", "gradient", "image"].indexOf(bgTab) * (100 / 3)}%` }}
+                          />
+                          {(["color", "gradient", "image"] as BgTab[]).map((t) => (
+                            <button
+                              key={t}
+                              className="relative flex-1 text-xs font-semibold capitalize items-center justify-center cursor-pointer m-px p-px py-0.5"
+                              onClick={() => setBgTab(t)}
+                            >
+                              {t}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {!isTransparentExport && bgTab === "color" && (
                     <div className="flex flex-col gap-2">
                       <div className="flex gap-2 overflow-auto pb-1">
                         {colors.map((color) => (
@@ -969,7 +1015,7 @@ export default function Home() {
                     </div>
                   )}
 
-                  {bgTab === "gradient" && (
+                  {!isTransparentExport && bgTab === "gradient" && (
                     <div className="flex flex-col gap-2">
                       <div
                         className="h-8 w-full rounded-md border border-black/10"
@@ -1023,7 +1069,7 @@ export default function Home() {
                     </div>
                   )}
 
-                  {bgTab === "image" && (
+                  {!isTransparentExport && bgTab === "image" && (
                     <div className="flex flex-col gap-2">
                       {bgImageUrl ? (
                         <div className="relative">
@@ -1082,7 +1128,7 @@ export default function Home() {
                   onClick={() => {
                     const a = document.createElement("a");
                     a.href = finishedVideoUrl;
-                    a.download = "mockup.mp4";
+                    a.download = isTransparentExport ? "mockup.webm" : "mockup.mp4";
                     a.click();
                   }}
                 >
