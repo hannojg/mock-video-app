@@ -8,11 +8,16 @@ import {
   Conversion,
   ALL_FORMATS,
   QUALITY_HIGH,
+  VideoSampleSink,
 } from 'mediabunny';
 import { Mockup } from '../constants/mockups';
 
+export type RenderMode = 'single' | 'comparison';
+
 type GenerateVideoParams = {
-  videoFile: File;
+  mode: RenderMode;
+  primaryVideoFile: File;
+  comparisonVideoFile?: File | null;
   mockup: Mockup;
   backgroundColor: string;
   canvasWidth: number;
@@ -20,7 +25,8 @@ type GenerateVideoParams = {
   phoneSizePercentage: number;
   mockupBackgroundColor: string;
   verticalOffset: number;
-  duration: number;
+  primaryDuration: number;
+  comparisonDuration?: number | null;
   frameRate: number;
 };
 
@@ -56,12 +62,15 @@ const useMediabunny = (): UseMediabunnyHook => {
     backgroundColor,
     mockup,
     mockupBackgroundColor,
+    mode,
     phoneSizePercentage,
     verticalOffset,
-    videoFile,
+    primaryVideoFile,
+    comparisonVideoFile,
     canvasWidth,
     canvasHeight,
-    duration,
+    primaryDuration,
+    comparisonDuration,
     frameRate,
   }: GenerateVideoParams): Promise<void> => {
     setTranspilingStarted(true);
@@ -69,62 +78,134 @@ const useMediabunny = (): UseMediabunnyHook => {
     setProgress(0);
 
     try {
-      // Calculate mockup dimensions
       const mockupScale = phoneSizePercentage / 100;
-      const mockupHeight = canvasHeight * mockupScale;
-      const mockupWidth = (mockup.width / mockup.height) * mockupHeight;
-      const mockupInnerHeight = Math.round(
-        (mockup.innerHeight / mockup.height) * mockupHeight
-      );
-      const mockupInnerWidth = Math.round(
-        (mockup.innerWidth / mockup.height) * mockupHeight
-      );
-      const posX = (canvasWidth - mockupWidth) / 2;
-      const posY = (canvasHeight - mockupHeight) / 2;
+      const mockupAspectRatio = mockup.width / mockup.height;
       const offsetInPixels = (verticalOffset / 100) * canvasHeight;
-      const adjustedPosY = (posY + offsetInPixels) * 0.9;
-      const offsetX = (mockupWidth - mockupInnerWidth) / 2;
-      const offsetY = (mockupHeight - mockupInnerHeight) / 2;
-      const borderRadius = mockup.cornerRadius * (mockupHeight / mockup.height);
+      const outputDuration =
+        mode === 'comparison'
+          ? Math.max(primaryDuration, comparisonDuration ?? 0)
+          : primaryDuration;
 
-      const coloredSquareWidth = Math.round(mockupInnerWidth * 1.01);
-      const coloredSquareHeight = Math.round(mockupInnerHeight * 1.01);
+      const createLayout = (position: { x: number; y: number }, mockupHeight: number, mockupWidth: number) => {
+        const mockupInnerHeight = Math.round(
+          (mockup.innerHeight / mockup.height) * mockupHeight
+        );
+        const mockupInnerWidth = Math.round(
+          (mockup.innerWidth / mockup.height) * mockupHeight
+        );
+        const offsetX = (mockupWidth - mockupInnerWidth) / 2;
+        const offsetY = (mockupHeight - mockupInnerHeight) / 2;
+        const borderRadius = mockup.cornerRadius * (mockupHeight / mockup.height);
 
-      console.table({
-        canvasWidth,
-        canvasHeight,
-        mockupScale,
-        mockupHeight,
-        mockupWidth,
-        mockupInnerHeight,
-        mockupInnerWidth,
-        posX,
-        posY,
-        offsetX,
-        offsetY,
-        verticalOffset,
-        adjustedPosY,
-        borderRadius,
-      });
+        return {
+          posX: position.x,
+          posY: position.y,
+          mockupWidth,
+          mockupHeight,
+          mockupInnerWidth,
+          mockupInnerHeight,
+          offsetX,
+          offsetY,
+          borderRadius,
+          coloredSquareWidth: Math.round(mockupInnerWidth * 1.01),
+          coloredSquareHeight: Math.round(mockupInnerHeight * 1.01),
+        };
+      };
 
-      // Load the mockup image
+      const singleMockupHeight = canvasHeight * mockupScale;
+      const singleMockupWidth = mockupAspectRatio * singleMockupHeight;
+      const singlePosX = (canvasWidth - singleMockupWidth) / 2;
+      const singlePosY = ((canvasHeight - singleMockupHeight) / 2 + offsetInPixels) * 0.9;
+
+      const comparisonGap = canvasWidth * 0.035;
+      const comparisonTargetHeight = canvasHeight * mockupScale;
+      const comparisonMaxHeightFromWidth =
+        (canvasWidth * 0.92 - comparisonGap) / (mockupAspectRatio * 2);
+      const comparisonMockupHeight = Math.min(
+        comparisonTargetHeight,
+        canvasHeight * 0.78,
+        comparisonMaxHeightFromWidth
+      );
+      const comparisonMockupWidth = mockupAspectRatio * comparisonMockupHeight;
+      const comparisonRowWidth = comparisonMockupWidth * 2 + comparisonGap;
+      const comparisonBaseX = (canvasWidth - comparisonRowWidth) / 2;
+      const comparisonBaseY = Math.max(
+        0,
+        Math.min(
+          canvasHeight - comparisonMockupHeight,
+          (canvasHeight - comparisonMockupHeight) / 2 + offsetInPixels
+        )
+      );
+
+      const layouts =
+        mode === 'comparison'
+          ? {
+              left: createLayout(
+                { x: comparisonBaseX, y: comparisonBaseY },
+                comparisonMockupHeight,
+                comparisonMockupWidth
+              ),
+              right: createLayout(
+                { x: comparisonBaseX + comparisonMockupWidth + comparisonGap, y: comparisonBaseY },
+                comparisonMockupHeight,
+                comparisonMockupWidth
+              ),
+            }
+          : {
+              left: createLayout(
+                { x: singlePosX, y: singlePosY },
+                singleMockupHeight,
+                singleMockupWidth
+              ),
+            };
+
       const mockupImageResponse = await fetch(mockup.imageRelative);
       const mockupImageBlob = await mockupImageResponse.blob();
       const mockupImage = await createImageBitmap(mockupImageBlob);
 
-      // Create input from video file
+      const primarySource = {
+        file: primaryVideoFile,
+        duration: primaryDuration,
+        slot: 'left' as const,
+      };
+      const comparisonSource =
+        mode === 'comparison' && comparisonVideoFile
+          ? {
+              file: comparisonVideoFile,
+              duration: comparisonDuration ?? 0,
+              slot: 'right' as const,
+            }
+          : null;
+
+      const mainSource =
+        comparisonSource && comparisonSource.duration > primarySource.duration
+          ? comparisonSource
+          : primarySource;
+      const secondarySource =
+        comparisonSource && mainSource.slot === primarySource.slot
+          ? comparisonSource
+          : comparisonSource && mainSource.slot === comparisonSource.slot
+            ? primarySource
+            : null;
+
       const input = new Input({
-        source: new BlobSource(videoFile),
+        source: new BlobSource(mainSource.file),
         formats: ALL_FORMATS,
       });
+      const secondaryInput = secondarySource
+        ? new Input({
+            source: new BlobSource(secondarySource.file),
+            formats: ALL_FORMATS,
+          })
+        : null;
+      const secondaryTrack = secondaryInput ? await secondaryInput.getPrimaryVideoTrack() : null;
+      const secondarySink = secondaryTrack ? new VideoSampleSink(secondaryTrack) : null;
 
-      // Create output
       const output = new Output({
         format: new Mp4OutputFormat(),
         target: new BufferTarget(),
       });
 
-      // Helper function to create rounded rectangle path
       const createRoundedRectPath = (
         ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
         x: number,
@@ -146,100 +227,107 @@ const useMediabunny = (): UseMediabunnyHook => {
         ctx.closePath();
       };
 
-      // Create reusable canvas and context outside the process loop for better performance
       const canvas = new OffscreenCanvas(canvasWidth, canvasHeight);
       const ctx = canvas.getContext('2d', {
-        alpha: false, // No alpha channel needed, improves performance
+        alpha: false,
         willReadFrequently: false
       })!;
 
-      // Create conversion with video processing
       const conversion = await Conversion.init({
         input,
         output,
         video: {
           width: canvasWidth,
           height: canvasHeight,
-          fit: 'fill', // We handle scaling/fitting manually in the process function
+          fit: 'fill',
           frameRate,
           codec: 'avc',
           bitrate: QUALITY_HIGH,
-          process: (sample) => {
-            // Clear canvas for this frame (faster than creating new canvas each time)
+          process: async (sample) => {
             ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
-            // 1. Draw background color
             ctx.fillStyle = backgroundColor;
             ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-            // 2. Draw black rounded rectangle (behind video for border effect)
-            const squareX = Math.round((posX + offsetX) * 0.995);
-            const squareY = Math.round((adjustedPosY + offsetY) * 0.995);
+            const secondarySample =
+              secondarySink ? await secondarySink.getSample(sample.timestamp) : null;
+            const slotSamples = {
+              [mainSource.slot]: sample,
+              ...(secondarySource ? { [secondarySource.slot]: secondarySample } : {}),
+            };
 
-            ctx.save();
-            createRoundedRectPath(
-              ctx,
-              squareX,
-              squareY,
-              coloredSquareWidth,
-              coloredSquareHeight,
-              borderRadius
-            );
-            ctx.fillStyle = mockupBackgroundColor;
-            ctx.fill();
-            ctx.restore();
+            for (const [slot, layout] of Object.entries(layouts)) {
+              const currentSample = slotSamples[slot as keyof typeof slotSamples];
+              const squareX = Math.round((layout.posX + layout.offsetX) * 0.995);
+              const squareY = Math.round((layout.posY + layout.offsetY) * 0.995);
+              const videoX = Math.round((layout.posX + layout.offsetX) * 0.9995);
+              const videoY = Math.round((layout.posY + layout.offsetY) * 0.9995);
 
-            // 3. Draw video scaled and rounded to fit device screen
-            const videoX = Math.round((posX + offsetX) * 0.9995);
-            const videoY = Math.round((adjustedPosY + offsetY) * 0.9995);
+              ctx.save();
+              createRoundedRectPath(
+                ctx,
+                squareX,
+                squareY,
+                layout.coloredSquareWidth,
+                layout.coloredSquareHeight,
+                layout.borderRadius
+              );
+              ctx.fillStyle = mockupBackgroundColor;
+              ctx.fill();
+              ctx.restore();
 
-            ctx.save();
-            createRoundedRectPath(
-              ctx,
-              videoX,
-              videoY,
-              mockupInnerWidth,
-              mockupInnerHeight,
-              borderRadius
-            );
-            ctx.clip();
+              if (currentSample) {
+                ctx.save();
+                createRoundedRectPath(
+                  ctx,
+                  videoX,
+                  videoY,
+                  layout.mockupInnerWidth,
+                  layout.mockupInnerHeight,
+                  layout.borderRadius
+                );
+                ctx.clip();
+                currentSample.draw(
+                  ctx,
+                  videoX,
+                  videoY,
+                  layout.mockupInnerWidth,
+                  layout.mockupInnerHeight
+                );
+                ctx.restore();
+              }
 
-            // Draw the video frame
-            sample.draw(ctx, videoX, videoY, mockupInnerWidth, mockupInnerHeight);
-            ctx.restore();
+              ctx.drawImage(
+                mockupImage,
+                layout.posX,
+                layout.posY,
+                layout.mockupWidth,
+                layout.mockupHeight
+              );
+            }
 
-            // 4. Draw device mockup PNG overlay
-            ctx.drawImage(
-              mockupImage,
-              posX,
-              adjustedPosY,
-              mockupWidth,
-              mockupHeight
-            );
+            secondarySample?.close();
 
             return canvas;
           },
         },
         audio: {
-          discard: true, // Disable audio as in the original implementation
+          discard: true,
         },
         trim: {
           start: 0,
-          end: duration,
+          end: outputDuration,
         },
       });
 
       conversionRef.current = conversion;
 
-      // Set up progress tracking
       conversion.onProgress = (progressValue: number) => {
         setProgress(progressValue * 100);
       };
 
-      // Execute the conversion
       await conversion.execute();
 
-      // Get the output buffer and create a blob URL
       const outputBuffer = output.target.buffer;
       if (outputBuffer) {
         const videoBlob = new Blob([outputBuffer], { type: 'video/mp4' });

@@ -4,88 +4,185 @@ import { Slider } from "@/components/ui/slider";
 import { colors } from "@/lib/constants/colors";
 import { mockupsDefs } from "@/lib/constants/mockups";
 import { aspectRatios } from "@/lib/constants/sizes";
-import useMediabunny from "@/lib/hooks/useMediabunny";
+import useMediabunny, { RenderMode } from "@/lib/hooks/useMediabunny";
 import { cn } from "@/lib/utils";
 import { smartTrim } from "@/lib/utils/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@radix-ui/react-popover";
 import clsx from "clsx";
 import Image from "next/image";
-import { ChangeEvent, DragEvent, DragEventHandler, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, useCallback, useEffect, useRef, useState } from "react";
+
+type VideoSlotId = "left" | "right";
+
+const defaultMockup = mockupsDefs.find((mockup) => mockup.name === "iPhone 15 Pro") ?? mockupsDefs[0];
+const defaultAspectRatio = aspectRatios.find((ratio) => ratio.name.startsWith("4:3")) ?? aspectRatios[0];
+
+function useObjectUrl(file: File | null) {
+  const [url, setUrl] = useState("");
+
+  useEffect(() => {
+    if (!file) {
+      setUrl("");
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [file]);
+
+  return url;
+}
 
 export default function Home() {
-  const { isLoaded, isLoading, generateVideo, progress, reset, transpilingFinished, finishedVideoUrl, transpilingStarted } = useMediabunny();
-  const [selectedMockup, setSelectedMockup] = useState(mockupsDefs[0]);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const { generateVideo, progress, reset, transpilingFinished, finishedVideoUrl, transpilingStarted } = useMediabunny();
+  const [mode, setMode] = useState<RenderMode>("single");
+  const [selectedMockup, setSelectedMockup] = useState(defaultMockup);
   const [scale, setScale] = useState(90);
   const [backgroundColor, setBackgroundColor] = useState(colors[0]);
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [videoUrl, setVideoUrl] = useState<string>("");
+  const [leftVideoFile, setLeftVideoFile] = useState<File | null>(null);
+  const [rightVideoFile, setRightVideoFile] = useState<File | null>(null);
+  const [leftVideoDuration, setLeftVideoDuration] = useState<number | null>(null);
+  const [rightVideoDuration, setRightVideoDuration] = useState<number | null>(null);
   const [verticalOffset, setVerticalOffset] = useState(0);
-  const [isDragOver, setIsDragOver] = useState(false);
+  const [dragTarget, setDragTarget] = useState<VideoSlotId | null>(null);
   const [selectedFramerate, setSelectedFramerate] = useState(30);
-  const [selectedAspectRatio, setSelectedAspectRatio] = useState(aspectRatios[0]);
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState(defaultAspectRatio);
+  const leftVideoRef = useRef<HTMLVideoElement>(null);
+  const rightVideoRef = useRef<HTMLVideoElement>(null);
+  const leftVideoUrl = useObjectUrl(leftVideoFile);
+  const rightVideoUrl = useObjectUrl(rightVideoFile);
 
-  const handleFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      setVideoFile(files[0]);
+  const comparisonEnabled = mode === "comparison";
+  const previewScale = comparisonEnabled ? Math.min(scale * 0.76, 88) : scale;
+  const playbackDuration = comparisonEnabled
+    ? Math.max(leftVideoDuration ?? 0, rightVideoDuration ?? 0)
+    : leftVideoDuration ?? 0;
+  const canGenerate = comparisonEnabled
+    ? Boolean(leftVideoFile && rightVideoFile && leftVideoDuration && rightVideoDuration)
+    : Boolean(leftVideoFile && leftVideoDuration);
+
+  const previewSlots = comparisonEnabled
+    ? [
+        {
+          id: "left" as const,
+          title: "Before",
+          emptyMessage: "Drop the baseline recording",
+          file: leftVideoFile,
+          url: leftVideoUrl,
+          ref: leftVideoRef,
+        },
+        {
+          id: "right" as const,
+          title: "After",
+          emptyMessage: "Drop the improved recording",
+          file: rightVideoFile,
+          url: rightVideoUrl,
+          ref: rightVideoRef,
+        },
+      ]
+    : [
+        {
+          id: "left" as const,
+          title: "Video",
+          emptyMessage: "Click or drag here to add a screen recording of your app",
+          file: leftVideoFile,
+          url: leftVideoUrl,
+          ref: leftVideoRef,
+        },
+      ];
+
+  const loadedVideoSummary = comparisonEnabled
+    ? [
+        leftVideoFile ? `Before: ${smartTrim(leftVideoFile.name, 12)}` : null,
+        rightVideoFile ? `After: ${smartTrim(rightVideoFile.name, 12)}` : null,
+      ]
+        .filter(Boolean)
+        .join(" | ")
+    : leftVideoFile
+      ? smartTrim(leftVideoFile.name, 16) + " | " + Math.fround(leftVideoFile.size / 1000000).toPrecision(3) + "/Mb"
+      : "";
+
+  const setVideoFileForSlot = useCallback((slot: VideoSlotId, file: File | null) => {
+    if (slot === "left") {
+      setLeftVideoFile(file);
+      setLeftVideoDuration(null);
+      return;
     }
-    setTimeout(() => {
-      event.target.value = "";
-    }, 50);
+
+    setRightVideoFile(file);
+    setRightVideoDuration(null);
   }, []);
-  useEffect(() => {
-    if (videoFile) {
-      const url = URL.createObjectURL(videoFile);
 
-      setVideoUrl(url);
+  const handleFileChange = useCallback(
+    (slot: VideoSlotId) => (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0] ?? null;
+      if (file) {
+        setVideoFileForSlot(slot, file);
+      }
 
-      return () => {
-        URL.revokeObjectURL(url);
-      };
-    }
-  }, [videoFile]);
-  useEffect(() => {
-    if (videoRef.current) {
-      const videoDuration = videoRef.current.duration;
-      const currentTime = (progress / 100) * videoDuration;
-      videoRef.current.currentTime = currentTime;
-    }
-  }, [progress]);
+      setTimeout(() => {
+        event.target.value = "";
+      }, 50);
+    },
+    [setVideoFileForSlot]
+  );
+
+  const handleDragOver = useCallback(
+    (slot: VideoSlotId) => (event: DragEvent<HTMLLabelElement>) => {
+      event.preventDefault();
+      setDragTarget(slot);
+    },
+    []
+  );
+
+  const handleDragLeave = useCallback(
+    (slot: VideoSlotId) => (event: DragEvent<HTMLLabelElement>) => {
+      event.preventDefault();
+      setDragTarget((current) => (current === slot ? null : current));
+    },
+    []
+  );
+
+  const handleDrop = useCallback(
+    (slot: VideoSlotId) => (event: DragEvent<HTMLLabelElement>) => {
+      event.preventDefault();
+      setDragTarget(null);
+
+      const file = event.dataTransfer.files?.[0] ?? null;
+      if (file) {
+        setVideoFileForSlot(slot, file);
+      }
+    },
+    [setVideoFileForSlot]
+  );
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
+    if (!playbackDuration) return;
+
+    const currentTime = (progress / 100) * playbackDuration;
+    [leftVideoRef.current, rightVideoRef.current].forEach((video) => {
+      if (video) {
+        video.currentTime = currentTime;
+      }
+    });
+  }, [playbackDuration, progress]);
+
+  useEffect(() => {
+    const videos = [leftVideoRef.current, rightVideoRef.current].filter(Boolean);
+    if (!videos.length) return;
 
     if (transpilingStarted) {
-      video.pause();
+      videos.forEach((video) => video?.pause());
     }
 
     if (transpilingFinished) {
-      video.play();
+      videos.forEach((video) => void video?.play());
     }
   }, [transpilingStarted, transpilingFinished]);
-
-  const handleDragOver = useCallback((event: DragEvent<HTMLLabelElement>) => {
-    console.log("drag over");
-    event.preventDefault();
-    setIsDragOver(true);
-  }, []);
-  const handleDragLeave = useCallback((event: DragEvent<HTMLLabelElement>) => {
-    console.log("drag leave");
-    event.preventDefault();
-    setIsDragOver(false);
-  }, []);
-  const handleDrop = useCallback((event: DragEvent<HTMLLabelElement>) => {
-    event.preventDefault();
-    console.log("drag drop");
-    setIsDragOver(false);
-
-    const files = event.dataTransfer.files;
-    if (files && files.length > 0) {
-      setVideoFile(files[0]);
-    }
-  }, []);
 
   return (
     <main
@@ -94,9 +191,7 @@ export default function Home() {
     >
       <div className="flex-1 flex flex-col text-center justify-center items-center">
         <span className="text-base text-black/70 font-medium mb-1">Video Mockup Generator</span>
-        {/* <span className="text-black/50 text-xs">1. Select video</span>
-        <span className="text-black/50 text-xs">2. Adjust settings to your liking</span>
-        <span className="text-black/50 text-xs">3. Generate video</span> */}
+        <span className="text-xs text-black/45">{comparisonEnabled ? "Compare two recordings side by side inside matching device frames." : "Turn a screen recording into a polished phone mockup video."}</span>
       </div>
       <div className="w-full h-full justify-center items-center flex relative">
         <div
@@ -109,97 +204,144 @@ export default function Home() {
             aspectRatio: `${selectedAspectRatio.width}/${selectedAspectRatio.height}`,
           }}
         >
-          <div
-            className="cursor-pointer absolute flex items-center justify-center group/phone"
-            style={{
-              height: `${scale}%`,
-              marginTop: `${verticalOffset}%`,
-              aspectRatio: `${selectedMockup.width}/${selectedMockup.height}`,
-            }}
-          >
-            <div className="h-full w-full flex items-center justify-center cursor-pointer">
-              <div className="absolute w-full h-full bg-white/5 rounded-[20%]  flex flex-col items-center justify-center p-[5%] group-hover/phone:bg-white/30 transition-colors transform-gpu">
-                <div
-                  className="flex flex-col items-center gap-2 "
-                  style={{
-                    transform: `scale(${Math.max(Math.min(scale / 100, 1), 0.6)})`,
-                    width: "90%",
-                  }}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 16 16"
-                    fill="currentColor"
-                    className="w-4 h-4 opacity-20 lg:w-5 lg:h-5"
-                  >
-                    <path d="M7.25 11.5a.75.75 0 0 0 0 1.5h1.5a.75.75 0 0 0 0-1.5h-1.5Z" />
-                    <path
-                      fillRule="evenodd"
-                      d="M6 1a2.5 2.5 0 0 0-2.5 2.5v9A2.5 2.5 0 0 0 6 15h4a2.5 2.5 0 0 0 2.5-2.5v-9A2.5 2.5 0 0 0 10 1H6Zm4 1.5h-.5V3a.5.5 0 0 1-.5.5H7a.5.5 0 0 1-.5-.5v-.5H6a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1Z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-
-                  <p className="text-xs lg:text-sm text-center text-black/50 max-w-full">Click or drag here to add a screen recording of your app</p>
-                </div>
-                {/* {isDragOver && <div className="w-full h-full absolute bg-white/80 backdrop-blur-lg pointer-events-none flex items-center justify-center text-black/70 text-xs">Drop video here</div>} */}
-              </div>
+          {!transpilingStarted && !transpilingFinished && (
+            <div className="absolute top-4 left-4 z-10">
               <div
-                className={cn("absolute rounded-[5%] overflow-hidden  transition-all duration-200 group-hover/phone:opacity-30 group-hover/phone:blur-sm")}
+                className="bg-stone-900/5 rounded-lg text-black/70"
+                style={{ padding: 2 }}
+              >
+                <div className="relative flex items-center">
+                  <div className={clsx("absolute inset-y-0 w-1/2 bg-white transition-all ease-in-out duration-200 rounded-md shadow", mode === "single" ? "translate-x-0" : "translate-x-full")} />
+                  <button
+                    className="relative px-3 py-1 text-xs font-semibold"
+                    onClick={() => setMode("single")}
+                  >
+                    Single
+                  </button>
+                  <button
+                    className="relative px-3 py-1 text-xs font-semibold"
+                    onClick={() => setMode("comparison")}
+                  >
+                    Compare
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className={cn("absolute inset-0 flex items-center justify-center px-[6%]", comparisonEnabled ? "gap-[4%]" : "gap-0")}>
+            {previewSlots.map((slot) => (
+              <div
+                key={slot.id}
+                className="cursor-pointer relative flex items-center justify-center group/phone"
                 style={{
-                  left: `${((selectedMockup.width - selectedMockup.innerWidth) / selectedMockup.width) * 50}%`,
-                  top: `${((selectedMockup.height - selectedMockup.innerHeight) / selectedMockup.height) * 40}%`,
-                  width: `${(selectedMockup.innerWidth / selectedMockup.width) * 100 * 1.005}%`,
-                  height: `${(selectedMockup.innerHeight / selectedMockup.height) * 100 * 1.01}%`,
+                  height: `${previewScale}%`,
+                  marginTop: `${verticalOffset}%`,
+                  aspectRatio: `${selectedMockup.width}/${selectedMockup.height}`,
                 }}
               >
-                {videoFile && (
-                  <video
-                    controls={false}
-                    muted
-                    autoPlay
-                    className="w-full h-full "
-                    key={videoUrl}
-                    loop
-                    playsInline
-                    unselectable="on"
-                    ref={videoRef}
+                <div className="h-full w-full flex items-center justify-center cursor-pointer">
+                  <div
+                    className={cn(
+                      "absolute w-full h-full rounded-[20%] flex flex-col items-center justify-center p-[5%] transition-colors transform-gpu",
+                      slot.file ? "bg-white/5 group-hover/phone:bg-white/30" : "bg-white/14 group-hover/phone:bg-white/24",
+                      dragTarget === slot.id && "bg-white/45"
+                    )}
                   >
-                    <source src={videoUrl} />
-                  </video>
-                )}
-              </div>
+                    <div
+                      className="flex flex-col items-center gap-2"
+                      style={{
+                        transform: `scale(${Math.max(Math.min(previewScale / 100, 1), 0.6)})`,
+                        width: "90%",
+                      }}
+                    >
+                      {comparisonEnabled && <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-black/45">{slot.title}</span>}
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 16 16"
+                        fill="currentColor"
+                        className="w-4 h-4 opacity-20 lg:w-5 lg:h-5"
+                      >
+                        <path d="M7.25 11.5a.75.75 0 0 0 0 1.5h1.5a.75.75 0 0 0 0-1.5h-1.5Z" />
+                        <path
+                          fillRule="evenodd"
+                          d="M6 1a2.5 2.5 0 0 0-2.5 2.5v9A2.5 2.5 0 0 0 6 15h4a2.5 2.5 0 0 0 2.5-2.5v-9A2.5 2.5 0 0 0 10 1H6Zm4 1.5h-.5V3a.5.5 0 0 1-.5.5H7a.5.5 0 0 1-.5-.5v-.5H6a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1Z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
 
-              <Image
-                priority
-                src={selectedMockup.imageRelative}
-                alt={selectedMockup.name + " mockup"}
-                width={selectedMockup.width}
-                height={selectedMockup.height}
-                className="h-full w-full relative object-contain"
-              />
-              <label
-                className="w-full h-full absolute cursor-pointer top-0"
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                <input
-                  type="file"
-                  className="hidden"
-                  accept="video/*"
-                  onChange={handleFileChange}
-                />
-              </label>
-            </div>
+                      <p className="text-xs lg:text-sm text-center text-black/50 max-w-full">{slot.emptyMessage}</p>
+                    </div>
+                  </div>
+                  <div
+                    className={cn("absolute rounded-[5%] overflow-hidden transition-all duration-200 group-hover/phone:opacity-30 group-hover/phone:blur-sm")}
+                    style={{
+                      left: `${((selectedMockup.width - selectedMockup.innerWidth) / selectedMockup.width) * 50}%`,
+                      top: `${((selectedMockup.height - selectedMockup.innerHeight) / selectedMockup.height) * 40}%`,
+                      width: `${(selectedMockup.innerWidth / selectedMockup.width) * 100 * 1.005}%`,
+                      height: `${(selectedMockup.innerHeight / selectedMockup.height) * 100 * 1.01}%`,
+                    }}
+                  >
+                    {slot.file && (
+                      <video
+                        controls={false}
+                        muted
+                        autoPlay
+                        className="w-full h-full"
+                        key={slot.url}
+                        loop
+                        playsInline
+                        unselectable="on"
+                        ref={slot.ref}
+                        onLoadedMetadata={() => {
+                          const duration = slot.ref.current?.duration ?? null;
+                          if (slot.id === "left") {
+                            setLeftVideoDuration(duration);
+                            return;
+                          }
+
+                          setRightVideoDuration(duration);
+                        }}
+                      >
+                        <source src={slot.url} />
+                      </video>
+                    )}
+                  </div>
+
+                  <Image
+                    priority
+                    src={selectedMockup.imageRelative}
+                    alt={selectedMockup.name + " mockup"}
+                    width={selectedMockup.width}
+                    height={selectedMockup.height}
+                    className="h-full w-full relative object-contain"
+                  />
+                  <label
+                    className="w-full h-full absolute cursor-pointer top-0"
+                    onDragOver={handleDragOver(slot.id)}
+                    onDragLeave={handleDragLeave(slot.id)}
+                    onDrop={handleDrop(slot.id)}
+                  >
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="video/*"
+                      onChange={handleFileChange(slot.id)}
+                    />
+                  </label>
+                </div>
+              </div>
+            ))}
           </div>
 
-          {videoFile && !transpilingStarted && !transpilingFinished && videoRef.current && (
+          {canGenerate && !transpilingStarted && !transpilingFinished && (
             <button
               className="flex items-center text-black/70 bg-white/90 hover:scale-105 transition-all ease-in-out shadow-md border-white/5 shadow-black/5 border backdrop-blur-3xl px-3.5 gap-1 text-sm font-medium py-1 rounded-md absolute bottom-3 left-4"
               onClick={() => {
                 generateVideo({
-                  videoFile,
+                  mode,
+                  primaryVideoFile: leftVideoFile!,
+                  comparisonVideoFile: comparisonEnabled ? rightVideoFile : null,
                   mockup: selectedMockup,
                   backgroundColor,
                   canvasWidth: selectedAspectRatio.width,
@@ -207,12 +349,13 @@ export default function Home() {
                   phoneSizePercentage: scale,
                   mockupBackgroundColor: "black",
                   verticalOffset,
-                  duration: videoRef.current?.duration!,
+                  primaryDuration: leftVideoDuration!,
+                  comparisonDuration: comparisonEnabled ? rightVideoDuration : null,
                   frameRate: selectedFramerate,
                 });
               }}
             >
-              <span>Generate Video</span>
+              <span>{comparisonEnabled ? "Generate Comparison" : "Generate Video"}</span>
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 16 16"
@@ -271,10 +414,6 @@ export default function Home() {
                           </option>
                         ))}
                       </optgroup>
-                      {/* <optgroup label="Android">
-                  <option value="volvo">Volvo</option>
-                  <option value="saab">Saab</option>
-                </optgroup> */}
                     </select>
 
                     <div className="absolute right-1 text-black/70">
@@ -402,13 +541,6 @@ export default function Home() {
                     style={{ padding: 2 }}
                   >
                     <div className="relative flex items-center">
-                      {/* <div className="absolute w-full">
-                        <div className="w-1/2 flex justify-between m-auto">
-                          <div className={clsx("h-3 w-px bg-gray-400 rounded-full opacity-0 transition-opacity duration-100 ease-in-out", selectedFramerate === 30 && "opacity-100")}></div>
-                          <div className={clsx("h-3 w-px bg-gray-400 rounded-full opacity-0 transition-opacity duration-100 ease-in-out", selectedFramerate === 60 && "opacity-100")}></div>
-                        </div>
-                      </div> */}
-
                       <div className={clsx("absolute left-0 inset-y-0 w-1/2 flex bg-white transition-all ease-in-out duration-200 transform rounded-md shadow", selectedFramerate === 30 && "translate-x-0", selectedFramerate === 60 && "translate-x-full")}></div>
 
                       <button
@@ -432,13 +564,13 @@ export default function Home() {
                     {colors.map((color) => (
                       <div
                         key={color}
-                        className={cn("w-6 h-6 rounded-full cursor-pointerborder-0 flex items-center justify-center border border-black/10 shadow-sm", color === backgroundColor && "")}
+                        className={cn("w-6 h-6 rounded-full cursor-pointerborder-0 flex items-center justify-center border border-black/10 shadow-sm")}
                         style={{ backgroundColor: color }}
                         onClick={() => {
                           setBackgroundColor(color);
                         }}
                       >
-                        {backgroundColor === color && <div className="bg-white shadow-sm  rounded-full h-2.5 w-2.5" />}
+                        {backgroundColor === color && <div className="bg-white shadow-sm rounded-full h-2.5 w-2.5" />}
                       </div>
                     ))}
                   </div>
@@ -446,18 +578,20 @@ export default function Home() {
               </Popover>
             </div>
           )}
-          {videoFile && !transpilingStarted && !transpilingFinished && <div className="hidden sm:block bottom-3 right-4 absolute text-xs  text-black/50 font-mono">{smartTrim(videoFile?.name, 16) + " | " + Math.fround(videoFile.size / 1000000).toPrecision(3) + "/Mb"}</div>}
+          {loadedVideoSummary && !transpilingStarted && !transpilingFinished && (
+            <div className="hidden sm:block bottom-3 right-4 absolute text-xs text-black/50 font-mono">{loadedVideoSummary}</div>
+          )}
           {transpilingStarted && !transpilingFinished && (
             <>
-              <div className="absolute transition-all h-full w-full left-0 " />
+              <div className="absolute transition-all h-full w-full left-0" />
               <div
                 className="absolute transition-all h-full left-0 bg-black/5"
                 style={{
                   width: `${progress}%`,
                 }}
               />
-              <div className="w-full h-full absolute pointer-events-none " />
-              <div className="text-xs bottom-3 left-4 text-black/50 font-mono absolute ">
+              <div className="w-full h-full absolute pointer-events-none" />
+              <div className="text-xs bottom-3 left-4 text-black/50 font-mono absolute">
                 <span>Generating video... {Math.min(Math.round(progress), 100)}%</span>
               </div>
             </>
@@ -466,11 +600,11 @@ export default function Home() {
             <div className="bg-white/20 backdrop-blur-md absolute transition-all h-full flex items-center justify-center w-full left-0">
               <div className="flex flex-col items-center">
                 <button
-                  className="flex items-center text-black/70 bg-white/90 hover:scale-105 transition-all ease-in-out shadow-md  border-black/10 border backdrop-blur-3xl px-3.5 gap-1 text-sm font-medium py-1 rounded-md "
+                  className="flex items-center text-black/70 bg-white/90 hover:scale-105 transition-all ease-in-out shadow-md border-black/10 border backdrop-blur-3xl px-3.5 gap-1 text-sm font-medium py-1 rounded-md"
                   onClick={() => {
                     const a = document.createElement("a");
                     a.href = finishedVideoUrl;
-                    a.download = "mockup.mp4";
+                    a.download = comparisonEnabled ? "comparison-mockup.mp4" : "mockup.mp4";
                     a.click();
                   }}
                 >
@@ -487,14 +621,17 @@ export default function Home() {
                 </button>
                 <hr className="my-1 border-none" />
                 <button
-                  className="flex items-center font-semibold text-black/60 hover:underline underline-offset-2 group/retry drop-shadow-sm  shadow-black gap-1 text-xs hover:scale-105 ease-in-out"
+                  className="flex items-center font-semibold text-black/60 hover:underline underline-offset-2 group/retry drop-shadow-sm shadow-black gap-1 text-xs hover:scale-105 ease-in-out"
                   onClick={() => {
-                    setVideoFile(null);
+                    setLeftVideoFile(null);
+                    setRightVideoFile(null);
+                    setLeftVideoDuration(null);
+                    setRightVideoDuration(null);
                     setScale(90);
                     setBackgroundColor(colors[0]);
                     setVerticalOffset(0);
-                    setSelectedMockup(mockupsDefs[0]);
-                    setSelectedAspectRatio(aspectRatios[0]);
+                    setSelectedMockup(defaultMockup);
+                    setSelectedAspectRatio(defaultAspectRatio);
                     reset();
                   }}
                 >
@@ -523,7 +660,7 @@ export default function Home() {
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 16 16"
             fill="currentColor"
-            className="w-4 h-4 "
+            className="w-4 h-4"
           >
             <path
               fillRule="evenodd"
