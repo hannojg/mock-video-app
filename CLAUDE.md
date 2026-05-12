@@ -8,13 +8,13 @@ This is a Next.js 14 client-side video mockup generator that allows users to cre
 
 ## Development Commands
 
-Uses pnpm as the package manager:
+Uses Bun as the package manager:
 
 ```bash
-pnpm dev          # Start development server on http://localhost:3000
-pnpm build        # Build production bundle
-pnpm start        # Start production server
-pnpm lint         # Run Next.js linting
+bun dev           # Start development server on http://localhost:3000
+bun run build     # Build production bundle
+bun run start     # Start production server
+bun run lint      # Run Next.js linting
 ```
 
 ## Architecture
