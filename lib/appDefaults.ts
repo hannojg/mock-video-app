@@ -7,7 +7,7 @@ export const defaultAspectRatio = aspectRatios.find((ratio) => ratio.name.starts
 
 export const defaultMockup = mockupsDefs.find((mockup) => mockup.name === "iPhone 15 Pro") ?? mockupsDefs[0];
 
-export const defaultDeviceGapPercent = 0;
+export const defaultDeviceGapPercent = 2;
 
 export function getMockupPreviewInnerX(mockup: Mockup): number {
   return mockup.innerX ?? (mockup.width - mockup.innerWidth) / 2;
