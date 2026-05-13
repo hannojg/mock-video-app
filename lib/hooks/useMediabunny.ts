@@ -36,11 +36,10 @@ type GenerateVideoParams = {
   loopShorter: boolean;
   videoStartTimes: number[];
   videoEndTimes: number[];
+  deviceGapPercent: number;
 };
 
 interface UseMediabunnyHook {
-  isLoaded: boolean;
-  isLoading: boolean;
   progress: number;
   reset: () => void;
   transpilingStarted: boolean;
@@ -77,9 +76,12 @@ const computeLayout = (
   phoneSizePercentage: number,
   verticalOffset: number,
   count: number,
+  gapPercent: number,
 ) => {
   const mockupAspect = mockup.width / mockup.height;
-  const columnWidth = canvasWidth / count;
+  const gapPx = count > 1 ? Math.round((canvasWidth * gapPercent) / 100) : 0;
+  const totalGapPx = gapPx * Math.max(0, count - 1);
+  const columnWidth = count > 0 ? (canvasWidth - totalGapPx) / count : canvasWidth;
   const maxHeightFromColumn = (columnWidth * 0.97) / mockupAspect;
   const maxHeightFromCanvas = canvasHeight * (phoneSizePercentage / 100);
   const mockupHeight = Math.min(maxHeightFromColumn, maxHeightFromCanvas);
@@ -92,9 +94,11 @@ const computeLayout = (
   const offsetY = (mockup.innerY ?? (mockup.height - mockup.innerHeight) / 2) * mockupScale;
   const offsetInPixels = (verticalOffset / 100) * canvasHeight;
 
+  const totalRowWidth = count * mockupWidth + totalGapPx;
+  const rowStartX = (canvasWidth - totalRowWidth) / 2;
+
   const slots = Array.from({ length: count }, (_, i) => {
-    const columnCenterX = columnWidth * i + columnWidth / 2;
-    const posX = columnCenterX - mockupWidth / 2;
+    const posX = rowStartX + i * (mockupWidth + gapPx);
     const posY = ((canvasHeight - mockupHeight) / 2 + offsetInPixels) * 0.9;
     return { posX, posY };
   });
@@ -181,8 +185,6 @@ const getCoveredVideoRect = (
 };
 
 const useMediabunny = (): UseMediabunnyHook => {
-  const [isLoaded] = useState(true);
-  const [isLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [transpilingStarted, setTranspilingStarted] = useState(false);
   const [transpilingFinished, setTranspilingFinished] = useState(false);
@@ -193,7 +195,10 @@ const useMediabunny = (): UseMediabunnyHook => {
     setProgress(0);
     setTranspilingStarted(false);
     setTranspilingFinished(false);
-    setFinishedVideoUrl(null);
+    setFinishedVideoUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
     conversionRef.current = null;
   }, []);
 
@@ -212,6 +217,7 @@ const useMediabunny = (): UseMediabunnyHook => {
     loopShorter,
     videoStartTimes,
     videoEndTimes,
+    deviceGapPercent,
   }: GenerateVideoParams): Promise<void> => {
     setTranspilingStarted(true);
     setTranspilingFinished(false);
@@ -219,7 +225,7 @@ const useMediabunny = (): UseMediabunnyHook => {
 
     try {
       const count = videoFiles.length;
-      const layout = computeLayout(canvasWidth, canvasHeight, mockup, phoneSizePercentage, verticalOffset, count);
+      const layout = computeLayout(canvasWidth, canvasHeight, mockup, phoneSizePercentage, verticalOffset, count, deviceGapPercent);
       const {
         slots,
         mockupWidth,
@@ -268,9 +274,6 @@ const useMediabunny = (): UseMediabunnyHook => {
       }
       const driverIdx = effectiveDurations.indexOf(maxDuration);
 
-      const sampleInputs = videoFiles.map(
-        (file) => new Input({ source: new BlobSource(file), formats: ALL_FORMATS })
-      );
       const sampleSinks: Array<{
         idx: number;
         sink: VideoSampleSink;
@@ -280,8 +283,9 @@ const useMediabunny = (): UseMediabunnyHook => {
         effectiveDuration: number;
         lastSample: VideoSample | null;
       }> = [];
+
       for (let i = 0; i < inputs.length; i++) {
-        const track = await sampleInputs[i].getPrimaryVideoTrack();
+        const track = await inputs[i].getPrimaryVideoTrack();
         if (!track) continue;
         sampleSinks.push({
           idx: i,
@@ -411,7 +415,10 @@ const useMediabunny = (): UseMediabunnyHook => {
           type: transparentBackground ? 'video/webm' : 'video/mp4',
         });
         const videoUrl = URL.createObjectURL(videoBlob);
-        setFinishedVideoUrl(videoUrl);
+        setFinishedVideoUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return videoUrl;
+        });
       }
     } catch (error) {
       console.error('Error generating video:', error);
@@ -423,8 +430,6 @@ const useMediabunny = (): UseMediabunnyHook => {
   };
 
   return {
-    isLoaded,
-    isLoading,
     progress,
     transpilingStarted,
     transpilingFinished,
