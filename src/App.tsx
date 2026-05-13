@@ -524,20 +524,13 @@ export default function App() {
               return (
                 <div
                   key={idx}
-                  className="relative flex items-center justify-center h-full"
+                  className="group/phone relative flex shrink-0 cursor-pointer items-center justify-center"
                   style={{
-                    flex: deviceCount > 1 ? "0 0 auto" : "1 1 100%",
-                    minWidth: deviceCount > 1 ? undefined : 0,
+                    height: `${sizingScale}%`,
+                    marginTop: `${verticalOffset}%`,
+                    aspectRatio: `${selectedMockup.width}/${selectedMockup.height}`,
                   }}
                 >
-                  <div
-                    className="cursor-pointer absolute flex items-center justify-center group/phone"
-                    style={{
-                      height: `${sizingScale}%`,
-                      marginTop: `${verticalOffset}%`,
-                      aspectRatio: `${selectedMockup.width}/${selectedMockup.height}`,
-                    }}
-                  >
                     <div className="h-full w-full flex items-center justify-center cursor-pointer">
                       <div className={cn(
                         "absolute w-full h-full bg-white/5 rounded-[20%] flex flex-col items-center justify-center p-[5%] transition-colors transform-gpu",
@@ -665,7 +658,6 @@ export default function App() {
                         />
                       </label>
                     </div>
-                  </div>
                 </div>
               );
             })}
